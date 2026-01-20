@@ -37,9 +37,18 @@
                         <textarea id="notes" name="notes" rows="4" placeholder="记录一些感想或评价..."></textarea>
                     </div>
 
-                    <div class="form-group">
+                    <!-- <div class="form-group">
                         <label for="images">上传图片（可多选）</label>
                         <input type="file" id="images" name="images" multiple accept="image/*">
+                        <div id="image-preview" class="image-preview"></div>
+                    </div> -->
+                    
+                    <div class="form-group">
+                        <label for="images">封面/图片</label>
+                        <div class="file-upload-wrapper">
+                            <input type="file" id="images" name="images" multiple accept="image/*" class="custom-file-input">
+                            <div class="file-upload-hint">点击或拖拽上传图片</div>
+                        </div>
                         <div id="image-preview" class="image-preview"></div>
                     </div>
 

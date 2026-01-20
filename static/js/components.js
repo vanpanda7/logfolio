@@ -9,11 +9,14 @@ function renderHeader(activePage = '') {
     const headerHTML = `
         <header class="header">
             <div class="container">
-                <h1>📚 个人年度文化成就墙</h1>
+                <div class="logo-area" style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">📒</span>
+                    <h1>Logfolio</h1>
+                </div>
                 <nav class="nav">
                     <a href="/" class="nav-link ${activePage === 'index' ? 'active' : ''}">时间线</a>
-                    <a href="/add" class="nav-link ${activePage === 'add' ? 'active' : ''}">添加记录</a>
-                    <a href="/manage-categories" class="nav-link ${activePage === 'manage-categories' ? 'active' : ''}">管理分类</a>
+                    <a href="/add" class="nav-link ${activePage === 'add' ? 'active' : ''}">记录</a>
+                    <a href="/manage-categories" class="nav-link ${activePage === 'manage-categories' ? 'active' : ''}">分类</a>
                 </nav>
             </div>
         </header>
