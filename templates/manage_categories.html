@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理分类 - Logfolio</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <div class="container">
+            <div class="form-container">
+                <h2>管理分类</h2>
+                
+                <!-- 添加分类表单 -->
+                <div class="add-category-section">
+                    <h3>添加新分类</h3>
+                    <form id="add-category-form" class="form-inline">
+                        <input type="text" id="category-name" placeholder="输入分类名称" required>
+                        <button type="submit" class="btn btn-primary">添加</button>
+                    </form>
+                </div>
+
+                <!-- 分类列表 -->
+                <div class="categories-section">
+                    <h3>现有分类</h3>
+                    <div id="categories-list" class="categories-list">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script>
+        // 初始化头部
+        document.addEventListener('DOMContentLoaded', function() {
+            renderHeader('manage-categories');
+        });
+        
+        // 加载分类列表
+        async function loadCategories() {
+            const list = document.getElementById('categories-list');
+            
+            try {
+                const categories = await CategoriesAPI.getAll();
+                
+                if (categories.length === 0) {
+                    list.innerHTML = '<p class="empty-message">暂无分类</p>';
+                    return;
+                }
+                
+                list.innerHTML = '';
+                categories.forEach(cat => {
+                    const item = document.createElement('div');
+                    item.className = 'category-item';
+                    
+                    const isSystem = !cat.user_defined;
+                    item.innerHTML = `
+                        <div class="category-info">
+                            <span class="category-name">${cat.name}</span>
+                            ${isSystem ? '<span class="category-badge">系统默认</span>' : ''}
+                        </div>
+                        ${!isSystem ? `<button class="btn btn-danger btn-sm" onclick="deleteCategory(${cat.id}, '${cat.name}')">删除</button>` : ''}
+                    `;
+                    
+                    list.appendChild(item);
+                });
+            } catch (error) {
+                list.innerHTML = '<p class="error-message">加载失败: ' + error.message + '</p>';
+            }
+        }
+
+        // 添加分类
+        document.getElementById('add-category-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const nameInput = document.getElementById('category-name');
+            const name = nameInput.value.trim();
+            
+            if (!name) {
+                showMessage('请输入分类名称', 'error');
+                return;
+            }
+            
+            try {
+                await CategoriesAPI.create(name);
+                showMessage('添加成功！', 'success');
+                nameInput.value = '';
+                loadCategories(); // 重新加载列表
+            } catch (error) {
+                showMessage('添加失败: ' + error.message, 'error');
+            }
+        });
+
+        // 删除分类
+        async function deleteCategory(id, name) {
+            if (!confirm(`确定要删除分类 "${name}" 吗？`)) {
+                return;
+            }
+            
+            try {
+                await CategoriesAPI.delete(id);
+                showMessage('删除成功', 'success');
+                loadCategories(); // 重新加载列表
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', loadCategories);
+    </script>
+</body>
+</html>

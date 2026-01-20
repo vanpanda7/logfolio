@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加记录 - Logfolio</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <div class="container">
+            <div class="form-container">
+                <h2>添加新记录</h2>
+                
+                <form id="add-item-form" class="form">
+                    <div class="form-group">
+                        <label for="title">标题 <span class="required">*</span></label>
+                        <input type="text" id="title" name="title" required placeholder="例如：肖申克的救赎">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category">分类 <span class="required">*</span></label>
+                        <select id="category" name="category_id" required>
+                            <option value="">请选择分类</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="finish_time">完成时间 <span class="required">*</span></label>
+                        <input type="datetime-local" id="finish_time" name="finish_time" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notes">备注/感想</label>
+                        <textarea id="notes" name="notes" rows="4" placeholder="记录一些感想或评价..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="images">上传图片（可多选）</label>
+                        <input type="file" id="images" name="images" multiple accept="image/*">
+                        <div id="image-preview" class="image-preview"></div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">提交</button>
+                        <button type="reset" class="btn btn-secondary">重置</button>
+                        <a href="/" class="btn btn-link">返回</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script>
+        // 初始化头部
+        document.addEventListener('DOMContentLoaded', function() {
+            renderHeader('add');
+        });
+        
+        // 加载分类列表
+        async function loadCategories() {
+            try {
+                const categories = await CategoriesAPI.getAll();
+                const categorySelect = document.getElementById('category');
+                
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = cat.name;
+                    categorySelect.appendChild(option);
+                });
+            } catch (error) {
+                showMessage('加载分类失败: ' + error.message, 'error');
+            }
+        }
+
+        // 图片预览
+        document.getElementById('images').addEventListener('change', function(e) {
+            const preview = document.getElementById('image-preview');
+            preview.innerHTML = '';
+            
+            const files = e.target.files;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'preview-image';
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        // 表单提交
+        document.getElementById('add-item-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value);
+            formData.append('category_id', document.getElementById('category').value);
+            formData.append('finish_time', document.getElementById('finish_time').value);
+            
+            const notes = document.getElementById('notes').value;
+            if (notes) {
+                formData.append('notes', notes);
+            }
+            
+            // 添加图片文件
+            const imageInput = document.getElementById('images');
+            for (let i = 0; i < imageInput.files.length; i++) {
+                formData.append('files', imageInput.files[i]);
+            }
+            
+            try {
+                await ItemsAPI.create(formData);
+                showMessage('添加成功！', 'success');
+                
+                // 延迟跳转，让用户看到成功消息
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+            } catch (error) {
+                showMessage('添加失败: ' + error.message, 'error');
+            }
+        });
+
+        // 设置默认时间为当前时间
+        document.getElementById('finish_time').value = new Date().toISOString().slice(0, 16);
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', loadCategories);
+    </script>
+</body>
+</html>

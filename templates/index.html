@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logfolio - 个人年度文化成就墙</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <div class="container">
+            <!-- 搜索框 -->
+            <div id="search-container"></div>
+
+            <!-- 筛选栏 -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="category-filter">分类：</label>
+                    <select id="category-filter" class="filter-select">
+                        <option value="">全部</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="year-filter">年份：</label>
+                    <select id="year-filter" class="filter-select">
+                        <option value="">全部</option>
+                    </select>
+                </div>
+                <button id="clear-filters" class="btn btn-secondary">清除筛选</button>
+            </div>
+
+            <!-- 统计信息 -->
+            <div id="statistics" class="statistics"></div>
+
+            <!-- 加载提示 -->
+            <div id="loading" class="loading">加载中...</div>
+
+            <!-- 海报墙容器 -->
+            <div id="items-grid" class="items-grid"></div>
+
+            <!-- 空状态 -->
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <p>暂无记录，<a href="/add">添加第一条记录</a>吧！</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script>
+        // 全局变量
+        let allItems = [];
+        let filteredItems = [];
+        let categories = [];
+        let currentFilters = {};
+
+        // 初始化
+        async function init() {
+            renderHeader('index');
+            createSearchBox();
+            await loadCategories();
+            await loadItems();
+            setupFilters();
+        }
+
+        // 加载分类列表
+        async function loadCategories() {
+            try {
+                categories = await CategoriesAPI.getAll();
+                const categorySelect = document.getElementById('category-filter');
+                
+                // 清空并重新填充
+                categorySelect.innerHTML = '<option value="">全部</option>';
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = cat.name;
+                    categorySelect.appendChild(option);
+                });
+            } catch (error) {
+                showMessage('加载分类失败: ' + error.message, 'error');
+            }
+        }
+
+        // 加载记录列表
+        async function loadItems(params = {}) {
+            const loading = document.getElementById('loading');
+            const emptyState = document.getElementById('empty-state');
+            const grid = document.getElementById('items-grid');
+            
+            loading.style.display = 'block';
+            grid.innerHTML = '';
+            
+            try {
+                allItems = await ItemsAPI.getAll(params);
+                currentFilters = params;
+                filteredItems = [...allItems];
+                
+                // 更新统计信息
+                const year = params.year || new Date().getFullYear();
+                await showStatistics(year);
+                
+                loading.style.display = 'none';
+                
+                if (filteredItems.length === 0) {
+                    emptyState.style.display = 'block';
+                    return;
+                }
+                
+                emptyState.style.display = 'none';
+                renderItems(filteredItems);
+            } catch (error) {
+                loading.style.display = 'none';
+                showMessage('加载记录失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 搜索处理
+        window.handleSearch = debounce(function(searchTerm) {
+            if (!searchTerm.trim()) {
+                filteredItems = [...allItems];
+            } else {
+                const term = searchTerm.toLowerCase();
+                filteredItems = allItems.filter(item => {
+                    const titleMatch = item.title.toLowerCase().includes(term);
+                    const notesMatch = item.notes && item.notes.toLowerCase().includes(term);
+                    return titleMatch || notesMatch;
+                });
+            }
+            
+            const emptyState = document.getElementById('empty-state');
+            const grid = document.getElementById('items-grid');
+            
+            if (filteredItems.length === 0) {
+                emptyState.style.display = 'block';
+                grid.innerHTML = '';
+            } else {
+                emptyState.style.display = 'none';
+                renderItems(filteredItems);
+            }
+        }, 300);
+
+        // 渲染记录卡片
+        function renderItems(items) {
+            const grid = document.getElementById('items-grid');
+            grid.innerHTML = '';
+            
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+                
+                // 封面图片（使用第一张图片，如果没有则显示占位符）
+                const coverImage = item.images && item.images.length > 0 
+                    ? item.images[0].image_url 
+                    : '/static/images/placeholder.svg';
+                
+                const hasImages = item.images && item.images.length > 0;
+                const cardId = `item-card-${item.id}`;
+                
+                card.innerHTML = `
+                    <div class="item-card-image" id="${cardId}" style="${hasImages ? 'cursor: pointer;' : ''}">
+                        <img src="${coverImage}" alt="${item.title}" onerror="this.src='/static/images/placeholder.svg'">
+                        <div class="item-card-category">${item.category_name}</div>
+                        ${hasImages ? '<div class="item-card-view-hint">点击查看图片</div>' : ''}
+                    </div>
+                    <div class="item-card-content">
+                        <h3 class="item-card-title">${item.title}</h3>
+                        <div class="item-card-time">
+                            <span class="time-icon">📅</span>
+                            ${formatDate(item.finish_time)}
+                        </div>
+                        ${item.notes ? `<p class="item-card-notes">${item.notes}</p>` : ''}
+                        ${item.images && item.images.length > 1 ? `<div class="item-card-images-count">共 ${item.images.length} 张图片</div>` : ''}
+                    </div>
+                    <div class="item-card-actions">
+                        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">删除</button>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+                
+                // 为有图片的卡片添加点击事件
+                if (hasImages) {
+                    const imageElement = document.getElementById(cardId);
+                    if (imageElement) {
+                        imageElement.addEventListener('click', function() {
+                            createImageViewer(item.images, 0);
+                        });
+                    }
+                }
+            });
+        }
+
+        // 设置筛选器
+        function setupFilters() {
+            const categoryFilter = document.getElementById('category-filter');
+            const yearFilter = document.getElementById('year-filter');
+            const clearBtn = document.getElementById('clear-filters');
+            
+            // 填充年份选项
+            const years = getYearOptions(2020);
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearFilter.appendChild(option);
+            });
+            
+            // 筛选事件
+            categoryFilter.addEventListener('change', applyFilters);
+            yearFilter.addEventListener('change', applyFilters);
+            clearBtn.addEventListener('click', () => {
+                categoryFilter.value = '';
+                yearFilter.value = '';
+                applyFilters();
+            });
+        }
+
+        // 应用筛选
+        function applyFilters() {
+            const categoryId = document.getElementById('category-filter').value;
+            const year = document.getElementById('year-filter').value;
+            
+            const params = {};
+            if (categoryId) params.category_id = categoryId;
+            if (year) params.year = parseInt(year);
+            
+            // 清除搜索框
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = '';
+            const searchClear = document.getElementById('search-clear');
+            if (searchClear) searchClear.style.display = 'none';
+            
+            loadItems(params);
+        }
+
+        // 删除记录
+        async function deleteItem(id) {
+            if (!confirm('确定要删除这条记录吗？')) {
+                return;
+            }
+            
+            try {
+                await ItemsAPI.delete(id);
+                showMessage('删除成功', 'success');
+                applyFilters(); // 重新加载列表
+            } catch (error) {
+                showMessage('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
