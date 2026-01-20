@@ -91,6 +91,27 @@ const ItemsAPI = {
     
     // 获取统计（别名，便于使用）
     getStatistics: (year) => apiRequest(`/items/statistics/year/${year}`),
+    
+    // 添加图片
+    addImages: async (itemId, formData) => {
+        const url = `${API_BASE}/items/${itemId}/images`;
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+        }
+        
+        return await response.json();
+    },
+    
+    // 删除图片
+    deleteImage: (imageId) => apiRequest(`/items/images/${imageId}`, {
+        method: 'DELETE',
+    }),
 };
 
 // 导出API对象

@@ -62,21 +62,12 @@ async def create_item(
     if not category:
         raise HTTPException(status_code=404, detail="分类不存在")
     
-    # 解析完成时间（datetime-local 格式：YYYY-MM-DDTHH:MM）
+    # 解析完成日期（date 格式：YYYY-MM-DD）
     try:
-        # 如果包含时区信息，使用 fromisoformat；否则直接解析
-        if 'T' in finish_time:
-            if finish_time.endswith('Z'):
-                finish_datetime = datetime.fromisoformat(finish_time.replace('Z', '+00:00'))
-            elif '+' in finish_time or finish_time.count('-') > 2:
-                finish_datetime = datetime.fromisoformat(finish_time)
-            else:
-                # 本地时间格式，直接解析
-                finish_datetime = datetime.fromisoformat(finish_time)
-        else:
-            raise ValueError("时间格式不正确")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"完成时间格式错误: {str(e)}")
+        # 解析日期字符串，设置为当天的开始时间（00:00:00）
+        finish_datetime = datetime.strptime(finish_time, '%Y-%m-%d')
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"完成日期格式错误，请使用 YYYY-MM-DD 格式: {str(e)}")
     
     # 创建记录
     db_item = Item(
@@ -221,6 +212,70 @@ def delete_item(item_id: int, db: Session = Depends(get_db)):
     db.delete(item)
     db.commit()
     return {"message": "记录删除成功"}
+
+
+@router.post("/{item_id}/images")
+async def add_item_images(
+    item_id: int,
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    """为记录添加图片"""
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    
+    saved_images = []
+    for file in files:
+        if file.filename:
+            # 生成唯一文件名
+            file_ext = Path(file.filename).suffix
+            unique_filename = f"{uuid.uuid4()}{file_ext}"
+            file_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            # 保存文件
+            with open(file_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+            
+            # 保存图片记录
+            image_url = f"/static/uploads/{unique_filename}"
+            db_image = ItemImage(item_id=item.id, image_url=image_url)
+            db.add(db_image)
+            saved_images.append(db_image)
+    
+    db.commit()
+    
+    # 返回新添加的图片
+    return [
+        {
+            "id": img.id,
+            "image_url": img.image_url,
+            "upload_time": img.upload_time.isoformat()
+        }
+        for img in saved_images
+    ]
+
+
+@router.delete("/images/{image_id}")
+def delete_item_image(image_id: int, db: Session = Depends(get_db)):
+    """删除单张图片"""
+    image = db.query(ItemImage).filter(ItemImage.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    
+    # 删除文件
+    file_path = image.image_url.replace("/static/uploads/", UPLOAD_DIR + "/")
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"删除图片文件失败: {e}")
+    
+    # 删除数据库记录
+    db.delete(image)
+    db.commit()
+    return {"message": "图片删除成功"}
 
 
 @router.get("/statistics/year/{year}", response_model=ItemStatistics)

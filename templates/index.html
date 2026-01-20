@@ -11,39 +11,30 @@
 
     <main class="main">
         <div class="container">
-            <!-- 搜索框 -->
-            <div id="search-container"></div>
-
-            <!-- 筛选栏 -->
-            <div class="filters">
-                <div class="filter-group">
-                    <label for="category-filter">分类：</label>
-                    <select id="category-filter" class="filter-select">
-                        <option value="">全部</option>
-                    </select>
+            <!-- 工具栏：搜索框（滚动时显示） -->
+            <div class="toolbar" id="toolbar-container">
+                <div class="search-wrapper" id="search-wrapper" style="display: none;">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" class="search-input" placeholder="搜索记录...">
+                    <button id="search-clear" class="search-clear" style="display: none;">✕</button>
                 </div>
-                <div class="filter-group">
-                    <label for="year-filter">年份：</label>
-                    <select id="year-filter" class="filter-select">
-                        <option value="">全部</option>
-                    </select>
-                </div>
-                <button id="clear-filters" class="btn btn-secondary">清除筛选</button>
             </div>
 
-            <!-- 统计信息 -->
+            <!-- 统计信息和筛选器整合面板 -->
             <div id="statistics" class="statistics"></div>
 
             <!-- 加载提示 -->
-            <div id="loading" class="loading">加载中...</div>
+            <div id="loading" class="loading" style="display: none;">加载中...</div>
+            
+            <!-- 空状态 -->
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <div class="empty-icon">🍂</div>
+                <p>这里还什么都没有</p>
+                <a href="/add" class="btn btn-primary">去记录一笔</a>
+            </div>
 
             <!-- 海报墙容器 -->
             <div id="items-grid" class="items-grid"></div>
-
-            <!-- 空状态 -->
-            <div id="empty-state" class="empty-state" style="display: none;">
-                <p>暂无记录，<a href="/add">添加第一条记录</a>吧！</p>
-            </div>
         </div>
     </main>
 
@@ -60,25 +51,102 @@
         // 初始化
         async function init() {
             renderHeader('index');
-            createSearchBox();
+            setupSearch();
             await loadCategories();
-            await loadItems();
-            setupFilters();
+            setupFilters(); // 先设置筛选器（包括默认年份）
+            // 使用默认年份加载数据
+            const currentYear = new Date().getFullYear();
+            await loadItems({ year: currentYear }, '', currentYear.toString());
+            
+            // 设置默认选中状态
+            setTimeout(() => {
+                const defaultYearItem = document.querySelector(`.stat-year-item[data-year="${currentYear}"]`);
+                if (defaultYearItem) {
+                    defaultYearItem.classList.add('active');
+                }
+                const allCategoryItem = document.querySelector('.stat-category-item[data-category-id=""]');
+                if (allCategoryItem) {
+                    allCategoryItem.classList.add('active');
+                }
+            }, 100);
+        }
+        
+        // 设置搜索功能
+        function setupSearch() {
+            const searchInput = document.getElementById('search-input');
+            const searchClear = document.getElementById('search-clear');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', function(e) {
+                    const value = e.target.value.trim();
+                    if (searchClear) {
+                        searchClear.style.display = value ? 'block' : 'none';
+                    }
+                    if (typeof window.handleSearch === 'function') {
+                        window.handleSearch(value);
+                    }
+                });
+            }
+            
+            if (searchClear) {
+                searchClear.addEventListener('click', function() {
+                    if (searchInput) {
+                        searchInput.value = '';
+                        searchClear.style.display = 'none';
+                        if (typeof window.handleSearch === 'function') {
+                            window.handleSearch('');
+                        }
+                    }
+                });
+            }
         }
 
-        // 加载分类列表
+        // 加载分类列表并渲染为 tab
         async function loadCategories() {
             try {
                 categories = await CategoriesAPI.getAll();
-                const categorySelect = document.getElementById('category-filter');
                 
-                // 清空并重新填充
-                categorySelect.innerHTML = '<option value="">全部</option>';
+                // 创建临时的分类tabs容器（用于获取HTML）
+                const tempContainer = document.createElement('div');
+                tempContainer.id = 'category-filter-tabs';
+                tempContainer.className = 'category-filter-tabs';
+                
+                // 添加"全部"按钮
+                const allTab = document.createElement('button');
+                allTab.type = 'button';
+                allTab.className = 'category-filter-tab active';
+                allTab.textContent = '全部';
+                allTab.dataset.categoryId = '';
+                tempContainer.appendChild(allTab);
+                
+                // 添加其他分类 tab
                 categories.forEach(cat => {
-                    const option = document.createElement('option');
-                    option.value = cat.id;
-                    option.textContent = cat.name;
-                    categorySelect.appendChild(option);
+                    const tab = document.createElement('button');
+                    tab.type = 'button';
+                    tab.className = 'category-filter-tab';
+                    tab.textContent = cat.name;
+                    tab.dataset.categoryId = cat.id;
+                    tempContainer.appendChild(tab);
+                });
+                
+                // 将临时容器添加到页面（隐藏）
+                tempContainer.style.display = 'none';
+                document.body.appendChild(tempContainer);
+                
+                // 绑定点击事件（使用事件委托）
+                tempContainer.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('category-filter-tab')) {
+                        // 移除所有 tab 的 active 状态
+                        document.querySelectorAll('.category-filter-tab').forEach(t => {
+                            t.classList.remove('active');
+                        });
+                        
+                        // 添加当前 tab 的 active 状态
+                        e.target.classList.add('active');
+                        
+                        // 应用筛选
+                        applyFilters();
+                    }
                 });
             } catch (error) {
                 showMessage('加载分类失败: ' + error.message, 'error');
@@ -86,7 +154,7 @@
         }
 
         // 加载记录列表
-        async function loadItems(params = {}) {
+        async function loadItems(params = {}, categoryId = '', year = '') {
             const loading = document.getElementById('loading');
             const emptyState = document.getElementById('empty-state');
             const grid = document.getElementById('items-grid');
@@ -99,9 +167,9 @@
                 currentFilters = params;
                 filteredItems = [...allItems];
                 
-                // 更新统计信息
-                const year = params.year || new Date().getFullYear();
-                await showStatistics(year);
+                // 更新统计信息（传入当前筛选条件）
+                const statsYear = params.year || new Date().getFullYear();
+                await showStatistics(statsYear.toString(), categoryId || params.category_id || '');
                 
                 loading.style.display = 'none';
                 
@@ -152,77 +220,259 @@
                 const card = document.createElement('div');
                 card.className = 'item-card';
                 
+                // 点击整个卡片显示项目详情
+                card.onclick = (e) => {
+                    // 如果点击的是删除按钮，不触发详情显示
+                    if (e.target.closest('.item-delete-btn')) {
+                        return;
+                    }
+                    showItemDetail(item);
+                };
+                
                 // 封面图片（使用第一张图片，如果没有则显示占位符）
                 const coverImage = item.images && item.images.length > 0 
                     ? item.images[0].image_url 
                     : '/static/images/placeholder.svg';
                 
-                const hasImages = item.images && item.images.length > 0;
-                const cardId = `item-card-${item.id}`;
-                
+                // 简洁版卡片结构：适合移动端的视觉流，带左上角徽章
                 card.innerHTML = `
-                    <div class="item-card-image" id="${cardId}" style="${hasImages ? 'cursor: pointer;' : ''}">
-                        <img src="${coverImage}" alt="${item.title}" onerror="this.src='/static/images/placeholder.svg'">
-                        <div class="item-card-category">${item.category_name}</div>
-                        ${hasImages ? '<div class="item-card-view-hint">点击查看图片</div>' : ''}
-                    </div>
-                    <div class="item-card-content">
-                        <h3 class="item-card-title">${item.title}</h3>
-                        <div class="item-card-time">
-                            <span class="time-icon">📅</span>
-                            ${formatDate(item.finish_time)}
+                    <div class="item-card-image">
+                        <div class="item-badge">${item.category_name}</div>
+                        <img src="${coverImage}" loading="lazy" alt="${item.title}" onerror="this.src='/static/images/placeholder.svg'">
+                        <div class="item-overlay">
+                            <h3 class="item-title">${item.title}</h3>
+                            <div class="item-meta">
+                                <span>${formatDate(item.finish_time)}</span>
+                                ${item.images && item.images.length > 1 ? `<span>📷 ${item.images.length}</span>` : ''}
+                            </div>
                         </div>
-                        ${item.notes ? `<p class="item-card-notes">${item.notes}</p>` : ''}
-                        ${item.images && item.images.length > 1 ? `<div class="item-card-images-count">共 ${item.images.length} 张图片</div>` : ''}
-                    </div>
-                    <div class="item-card-actions">
-                        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">删除</button>
                     </div>
                 `;
                 
-                grid.appendChild(card);
+                // 添加删除按钮（悬停/长按时显示）
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'item-delete-btn';
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.title = '删除';
+                deleteBtn.style.display = 'none';
                 
-                // 为有图片的卡片添加点击事件
-                if (hasImages) {
-                    const imageElement = document.getElementById(cardId);
-                    if (imageElement) {
-                        imageElement.addEventListener('click', function() {
-                            createImageViewer(item.images, 0);
-                        });
+                deleteBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // 阻止触发卡片点击事件
+                    showConfirmDialog('确定要删除这条记录吗？', () => {
+                        deleteItem(item.id);
+                    });
+                });
+                
+                card.appendChild(deleteBtn);
+                
+                // 移动端：长按显示删除按钮（延长到2秒）
+                let longPressTimer;
+                let isLongPress = false;
+                let deleteBtnVisible = false;
+                
+                card.addEventListener('touchstart', function(e) {
+                    isLongPress = false;
+                    longPressTimer = setTimeout(() => {
+                        isLongPress = true;
+                        deleteBtnVisible = true;
+                        e.preventDefault();
+                        // 显示删除按钮
+                        deleteBtn.style.display = 'flex';
+                        // 添加震动反馈（如果支持）
+                        if (navigator.vibrate) {
+                            navigator.vibrate([50, 30, 50]);
+                        }
+                        // 添加视觉反馈
+                        card.style.transform = 'scale(0.98)';
+                        setTimeout(() => {
+                            card.style.transform = '';
+                        }, 200);
+                    }, 2000); // 改为2秒
+                });
+                
+                card.addEventListener('touchend', function() {
+                    clearTimeout(longPressTimer);
+                    // 如果长按完成，保持按钮显示
+                    if (isLongPress && deleteBtnVisible) {
+                        // 按钮保持显示，直到用户点击删除或点击其他地方
+                        return;
                     }
-                }
+                    // 如果未完成长按，隐藏按钮
+                    if (!isLongPress) {
+                        deleteBtn.style.display = 'none';
+                    }
+                });
+                
+                card.addEventListener('touchmove', function() {
+                    clearTimeout(longPressTimer);
+                    isLongPress = false;
+                    deleteBtnVisible = false;
+                    deleteBtn.style.display = 'none';
+                });
+                
+                // 点击卡片其他地方时，如果删除按钮已显示，则隐藏它
+                card.addEventListener('click', function(e) {
+                    // 如果点击的不是删除按钮，且删除按钮已显示，则隐藏它
+                    if (deleteBtnVisible && e.target !== deleteBtn && !deleteBtn.contains(e.target)) {
+                        deleteBtn.style.display = 'none';
+                        deleteBtnVisible = false;
+                    }
+                });
+                
+                // PC端：悬停显示删除按钮
+                card.addEventListener('mouseenter', function() {
+                    deleteBtn.style.display = 'flex';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    deleteBtn.style.display = 'none';
+                });
+                
+                // PC端右键菜单删除
+                card.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    showConfirmDialog('确定要删除这条记录吗？', () => {
+                        deleteItem(item.id);
+                    });
+                });
+                
+                grid.appendChild(card);
             });
         }
 
         // 设置筛选器
         function setupFilters() {
-            const categoryFilter = document.getElementById('category-filter');
-            const yearFilter = document.getElementById('year-filter');
-            const clearBtn = document.getElementById('clear-filters');
+            // 创建年份选择器（如果不存在）
+            let yearFilter = document.getElementById('year-filter');
+            if (!yearFilter) {
+                yearFilter = document.createElement('select');
+                yearFilter.id = 'year-filter';
+                yearFilter.className = 'filter-select';
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '全部年份';
+                yearFilter.appendChild(defaultOption);
+                document.body.appendChild(yearFilter);
+                yearFilter.style.display = 'none';
+            }
             
             // 填充年份选项
             const years = getYearOptions(2020);
+            const currentYear = new Date().getFullYear();
+            
+            // 清空现有选项（除了第一个）
+            while (yearFilter.children.length > 1) {
+                yearFilter.removeChild(yearFilter.lastChild);
+            }
+            
             years.forEach(year => {
                 const option = document.createElement('option');
                 option.value = year;
                 option.textContent = year;
+                // 设置当前年为默认选中
+                if (year === currentYear) {
+                    option.selected = true;
+                }
                 yearFilter.appendChild(option);
             });
             
-            // 筛选事件
-            categoryFilter.addEventListener('change', applyFilters);
-            yearFilter.addEventListener('change', applyFilters);
-            clearBtn.addEventListener('click', () => {
-                categoryFilter.value = '';
-                yearFilter.value = '';
-                applyFilters();
+            // 设置滚动监听，显示搜索框
+            setupScrollSearch();
+        }
+        
+        // 设置筛选器事件（在统计卡片内部）
+        window.setupFilterEvents = function() {
+            // 绑定分类tabs事件（使用事件委托）
+            const categoryTabsInner = document.getElementById('category-filter-tabs-inner');
+            if (categoryTabsInner) {
+                categoryTabsInner.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('category-filter-tab')) {
+                        // 同步更新隐藏的原始tabs
+                        const originalTabs = document.getElementById('category-filter-tabs');
+                        if (originalTabs) {
+                            originalTabs.querySelectorAll('.category-filter-tab').forEach(t => {
+                                t.classList.remove('active');
+                                if (t.dataset.categoryId === e.target.dataset.categoryId) {
+                                    t.classList.add('active');
+                                }
+                            });
+                        }
+                        
+                        // 移除所有 tab 的 active 状态
+                        document.querySelectorAll('.category-filter-tab').forEach(t => {
+                            t.classList.remove('active');
+                        });
+                        
+                        // 添加当前 tab 的 active 状态
+                        e.target.classList.add('active');
+                        
+                        // 应用筛选
+                        applyFilters();
+                    }
+                });
+            }
+            
+            // 绑定年份选择器事件
+            const yearFilterInner = document.getElementById('year-filter-inner');
+            if (yearFilterInner) {
+                yearFilterInner.addEventListener('change', function() {
+                    // 同步更新原始的年份选择器
+                    const originalYearFilter = document.getElementById('year-filter');
+                    if (originalYearFilter && originalYearFilter !== yearFilterInner) {
+                        originalYearFilter.value = this.value;
+                    }
+                    applyFilters();
+                });
+            }
+        };
+        
+        // 设置滚动监听，当用户滚动时显示搜索框
+        function setupScrollSearch() {
+            const searchWrapper = document.getElementById('search-wrapper');
+            let lastScrollTop = 0;
+            let scrollTimeout;
+            
+            window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                // 清除之前的定时器
+                clearTimeout(scrollTimeout);
+                
+                // 如果向下滚动超过 100px，显示搜索框
+                if (scrollTop > 100 && scrollTop > lastScrollTop) {
+                    searchWrapper.style.display = 'block';
+                    searchWrapper.style.opacity = '0';
+                    setTimeout(() => {
+                        searchWrapper.style.transition = 'opacity 0.3s';
+                        searchWrapper.style.opacity = '1';
+                    }, 10);
+                }
+                
+                // 如果滚动到顶部，隐藏搜索框
+                if (scrollTop < 50) {
+                    searchWrapper.style.opacity = '0';
+                    scrollTimeout = setTimeout(() => {
+                        searchWrapper.style.display = 'none';
+                    }, 300);
+                }
+                
+                lastScrollTop = scrollTop;
             });
         }
 
-        // 应用筛选
-        function applyFilters() {
-            const categoryId = document.getElementById('category-filter').value;
-            const year = document.getElementById('year-filter').value;
+        // 通过分类筛选
+        window.filterByCategory = function(categoryId) {
+            // 更新分类选中状态
+            document.querySelectorAll('.stat-category-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.categoryId === categoryId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 获取当前选中的年份
+            const activeYearItem = document.querySelector('.stat-year-item.active');
+            const year = activeYearItem ? activeYearItem.dataset.year : '';
             
             const params = {};
             if (categoryId) params.category_id = categoryId;
@@ -230,19 +480,317 @@
             
             // 清除搜索框
             const searchInput = document.getElementById('search-input');
-            if (searchInput) searchInput.value = '';
+            if (searchInput) {
+                searchInput.value = '';
+                if (typeof window.handleSearch === 'function') {
+                    window.handleSearch('');
+                }
+            }
             const searchClear = document.getElementById('search-clear');
             if (searchClear) searchClear.style.display = 'none';
             
-            loadItems(params);
+            loadItems(params, categoryId, year);
+        };
+        
+        // 通过年份筛选
+        window.filterByYear = function(year) {
+            // 更新年份选中状态
+            document.querySelectorAll('.stat-year-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.year === year) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 获取当前选中的分类
+            const activeCategoryItem = document.querySelector('.stat-category-item.active');
+            const categoryId = activeCategoryItem ? activeCategoryItem.dataset.categoryId : '';
+            
+            const params = {};
+            if (categoryId) params.category_id = categoryId;
+            if (year) params.year = parseInt(year);
+            
+            // 清除搜索框
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = '';
+                if (typeof window.handleSearch === 'function') {
+                    window.handleSearch('');
+                }
+            }
+            const searchClear = document.getElementById('search-clear');
+            if (searchClear) searchClear.style.display = 'none';
+            
+            loadItems(params, categoryId, year);
+        };
+        
+        // 应用筛选（保留用于其他场景）
+        function applyFilters() {
+            // 获取选中的分类
+            const activeCategoryItem = document.querySelector('.stat-category-item.active');
+            const categoryId = activeCategoryItem ? activeCategoryItem.dataset.categoryId : '';
+            
+            // 获取选中的年份
+            const activeYearItem = document.querySelector('.stat-year-item.active');
+            const year = activeYearItem ? activeYearItem.dataset.year : '';
+            
+            const params = {};
+            if (categoryId) params.category_id = categoryId;
+            if (year) params.year = parseInt(year);
+            
+            // 清除搜索框
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = '';
+                if (typeof window.handleSearch === 'function') {
+                    window.handleSearch('');
+                }
+            }
+            const searchClear = document.getElementById('search-clear');
+            if (searchClear) searchClear.style.display = 'none';
+            
+            loadItems(params, categoryId, year);
         }
 
-        // 删除记录
-        async function deleteItem(id) {
-            if (!confirm('确定要删除这条记录吗？')) {
+        // 显示项目详情
+        function showItemDetail(item) {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'item-detail-overlay';
+            
+            // 创建详情对话框
+            const dialog = document.createElement('div');
+            dialog.className = 'item-detail-dialog';
+            
+            // 构建图片网格
+            let imagesHTML = '';
+            if (item.images && item.images.length > 0) {
+                imagesHTML = `
+                    <div class="item-detail-images" id="item-detail-images-${item.id}">
+                        ${item.images.map((img, idx) => `
+                            <div class="item-detail-image-item" data-image-id="${img.id}">
+                                <img src="${img.image_url}" alt="图片 ${idx + 1}">
+                                <button class="item-image-delete" onclick="deleteImageFromDetail(${img.id}, ${item.id}, this.closest('.item-detail-overlay'))" title="删除图片">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                imagesHTML = `<div class="item-detail-images" id="item-detail-images-${item.id}"></div>`;
+            }
+            
+            dialog.innerHTML = `
+                <div class="item-detail-content">
+                    <button class="item-detail-close" onclick="closeDetailDialog(this.closest('.item-detail-overlay'))">✕</button>
+                    <div class="item-detail-header">
+                        <div class="item-detail-badge">${item.category_name}</div>
+                        <h2 class="item-detail-title">${item.title}</h2>
+                        <div class="item-detail-date">
+                            <span class="date-icon">📅</span>
+                            ${formatDate(item.finish_time)}
+                        </div>
+                    </div>
+                    ${item.notes ? `
+                        <div class="item-detail-notes">
+                            <h3>备注/感想</h3>
+                            <p>${item.notes}</p>
+                        </div>
+                    ` : ''}
+                    <div class="item-detail-images-section">
+                        <div class="item-detail-images-header">
+                            <h3>图片</h3>
+                            <label class="btn btn-secondary btn-sm" style="margin: 0;">
+                                添加图片
+                                <input type="file" 
+                                       id="add-images-${item.id}" 
+                                       multiple 
+                                       accept="image/*" 
+                                       style="display: none;"
+                                       onchange="handleAddImages(${item.id}, this.closest('.item-detail-overlay'))">
+                            </label>
+                        </div>
+                        ${imagesHTML}
+                    </div>
+                    <div class="item-detail-actions">
+                        <button class="btn btn-danger" onclick="deleteItemFromDetail(${item.id}, this.closest('.item-detail-overlay'))">删除记录</button>
+                    </div>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // 存储当前item数据到overlay，方便后续更新
+            overlay.dataset.itemId = item.id;
+            overlay.dataset.currentImages = JSON.stringify(item.images || []);
+            
+            // 为图片添加点击事件（查看大图）
+            const imageItems = dialog.querySelectorAll('.item-detail-image-item');
+            imageItems.forEach((itemEl, idx) => {
+                const img = itemEl.querySelector('img');
+                if (img) {
+                    img.addEventListener('click', (e) => {
+                        // 如果点击的不是删除按钮，则查看大图
+                        if (!e.target.closest('.item-image-delete')) {
+                            const currentImages = JSON.parse(overlay.dataset.currentImages);
+                            createImageViewer(currentImages, idx);
+                        }
+                    });
+                }
+            });
+            
+            // 添加动画
+            setTimeout(() => {
+                overlay.classList.add('show');
+            }, 10);
+            
+            // 点击遮罩层关闭
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    closeDetailDialog(overlay);
+                }
+            });
+            
+            // ESC 键关闭
+            const escHandler = (e) => {
+                if (e.key === 'Escape') {
+                    closeDetailDialog(overlay);
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+        }
+        
+        // 处理添加图片
+        async function handleAddImages(itemId, overlay) {
+            const fileInput = document.getElementById(`add-images-${itemId}`);
+            const files = fileInput.files;
+            
+            if (!files || files.length === 0) {
                 return;
             }
             
+            try {
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('files', files[i]);
+                }
+                
+                const newImages = await ItemsAPI.addImages(itemId, formData);
+                
+                // 更新overlay中的图片数据
+                const currentImages = JSON.parse(overlay.dataset.currentImages || '[]');
+                currentImages.push(...newImages);
+                overlay.dataset.currentImages = JSON.stringify(currentImages);
+                
+                // 重新渲染图片网格
+                const imagesContainer = overlay.querySelector(`#item-detail-images-${itemId}`);
+                const existingImages = currentImages;
+                
+                imagesContainer.innerHTML = existingImages.map((img, idx) => `
+                    <div class="item-detail-image-item" data-image-id="${img.id}">
+                        <img src="${img.image_url}" alt="图片 ${idx + 1}">
+                        <button class="item-image-delete" onclick="deleteImageFromDetail(${img.id}, ${itemId}, this.closest('.item-detail-overlay'))" title="删除图片">✕</button>
+                    </div>
+                `).join('');
+                
+                // 重新绑定图片点击事件
+                const imageItems = imagesContainer.querySelectorAll('.item-detail-image-item');
+                imageItems.forEach((itemEl, idx) => {
+                    const img = itemEl.querySelector('img');
+                    if (img) {
+                        img.addEventListener('click', (e) => {
+                            if (!e.target.closest('.item-image-delete')) {
+                                createImageViewer(existingImages, idx);
+                            }
+                        });
+                    }
+                });
+                
+                showMessage('图片添加成功', 'success');
+                
+                // 清空文件输入
+                fileInput.value = '';
+                
+                // 刷新列表（可选）
+                applyFilters();
+            } catch (error) {
+                showMessage('添加图片失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 删除图片
+        async function deleteImageFromDetail(imageId, itemId, overlay) {
+            showConfirmDialog('确定要删除这张图片吗？', async () => {
+                try {
+                    await ItemsAPI.deleteImage(imageId);
+                    
+                    // 更新overlay中的图片数据
+                    const currentImages = JSON.parse(overlay.dataset.currentImages || '[]');
+                    const updatedImages = currentImages.filter(img => img.id !== imageId);
+                    overlay.dataset.currentImages = JSON.stringify(updatedImages);
+                    
+                    // 重新渲染图片网格
+                    const imagesContainer = overlay.querySelector(`#item-detail-images-${itemId}`);
+                    
+                    if (updatedImages.length === 0) {
+                        imagesContainer.innerHTML = '';
+                    } else {
+                        imagesContainer.innerHTML = updatedImages.map((img, idx) => `
+                            <div class="item-detail-image-item" data-image-id="${img.id}">
+                                <img src="${img.image_url}" alt="图片 ${idx + 1}">
+                                <button class="item-image-delete" onclick="deleteImageFromDetail(${img.id}, ${itemId}, this.closest('.item-detail-overlay'))" title="删除图片">✕</button>
+                            </div>
+                        `).join('');
+                        
+                        // 重新绑定图片点击事件
+                        const imageItems = imagesContainer.querySelectorAll('.item-detail-image-item');
+                        imageItems.forEach((itemEl, idx) => {
+                            const img = itemEl.querySelector('img');
+                            if (img) {
+                                img.addEventListener('click', (e) => {
+                                    if (!e.target.closest('.item-image-delete')) {
+                                        createImageViewer(updatedImages, idx);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    
+                    showMessage('图片删除成功', 'success');
+                    
+                    // 刷新列表
+                    applyFilters();
+                } catch (error) {
+                    showMessage('删除图片失败: ' + error.message, 'error');
+                }
+            });
+        }
+        
+        // 关闭详情对话框
+        function closeDetailDialog(overlay) {
+            overlay.classList.remove('show');
+            setTimeout(() => {
+                overlay.remove();
+            }, 300);
+        }
+        
+        // 从详情对话框删除记录
+        async function deleteItemFromDetail(id, overlay) {
+            showConfirmDialog('确定要删除这条记录吗？', async () => {
+                try {
+                    await ItemsAPI.delete(id);
+                    showMessage('删除成功', 'success');
+                    closeDetailDialog(overlay);
+                    applyFilters(); // 重新加载列表
+                } catch (error) {
+                    showMessage('删除失败: ' + error.message, 'error');
+                }
+            });
+        }
+        
+        // 删除记录
+        async function deleteItem(id) {
             try {
                 await ItemsAPI.delete(id);
                 showMessage('删除成功', 'success');

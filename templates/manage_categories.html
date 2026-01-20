@@ -100,17 +100,15 @@
 
         // 删除分类
         async function deleteCategory(id, name) {
-            if (!confirm(`确定要删除分类 "${name}" 吗？`)) {
-                return;
-            }
-            
-            try {
-                await CategoriesAPI.delete(id);
-                showMessage('删除成功', 'success');
-                loadCategories(); // 重新加载列表
-            } catch (error) {
-                showMessage('删除失败: ' + error.message, 'error');
-            }
+            showConfirmDialog(`确定要删除分类 "${name}" 吗？`, async () => {
+                try {
+                    await CategoriesAPI.delete(id);
+                    showMessage('删除成功', 'success');
+                    loadCategories(); // 重新加载列表
+                } catch (error) {
+                    showMessage('删除失败: ' + error.message, 'error');
+                }
+            });
         }
 
         // 页面加载时初始化

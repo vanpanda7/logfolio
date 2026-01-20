@@ -22,14 +22,15 @@
 
                     <div class="form-group">
                         <label for="category">分类 <span class="required">*</span></label>
-                        <select id="category" name="category_id" required>
-                            <option value="">请选择分类</option>
-                        </select>
+                        <div id="category-tabs" class="category-tabs">
+                            <!-- 分类 tab 将通过 JavaScript 动态生成 -->
+                        </div>
+                        <input type="hidden" id="category_id" name="category_id" required>
                     </div>
 
                     <div class="form-group">
-                        <label for="finish_time">完成时间 <span class="required">*</span></label>
-                        <input type="datetime-local" id="finish_time" name="finish_time" required>
+                        <label for="finish_time">完成日期 <span class="required">*</span></label>
+                        <input type="date" id="finish_time" name="finish_time" required>
                     </div>
 
                     <div class="form-group">
@@ -54,7 +55,7 @@
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">提交</button>
-                        <button type="reset" class="btn btn-secondary">重置</button>
+                        <button type="reset" class="btn btn-secondary" id="reset-btn">重置</button>
                         <a href="/" class="btn btn-link">返回</a>
                     </div>
                 </form>
@@ -71,17 +72,37 @@
             renderHeader('add');
         });
         
-        // 加载分类列表
+        // 加载分类列表并渲染为 tab
         async function loadCategories() {
             try {
                 const categories = await CategoriesAPI.getAll();
-                const categorySelect = document.getElementById('category');
+                const categoryTabs = document.getElementById('category-tabs');
+                const categoryInput = document.getElementById('category_id');
+                
+                categoryTabs.innerHTML = '';
                 
                 categories.forEach(cat => {
-                    const option = document.createElement('option');
-                    option.value = cat.id;
-                    option.textContent = cat.name;
-                    categorySelect.appendChild(option);
+                    const tab = document.createElement('button');
+                    tab.type = 'button';
+                    tab.className = 'category-tab';
+                    tab.textContent = cat.name;
+                    tab.dataset.categoryId = cat.id;
+                    
+                    // 点击 tab 选择分类
+                    tab.addEventListener('click', function() {
+                        // 移除所有 tab 的 active 状态
+                        document.querySelectorAll('.category-tab').forEach(t => {
+                            t.classList.remove('active');
+                        });
+                        
+                        // 添加当前 tab 的 active 状态
+                        this.classList.add('active');
+                        
+                        // 设置隐藏输入框的值
+                        categoryInput.value = cat.id;
+                    });
+                    
+                    categoryTabs.appendChild(tab);
                 });
             } catch (error) {
                 showMessage('加载分类失败: ' + error.message, 'error');
@@ -113,9 +134,16 @@
         document.getElementById('add-item-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            // 验证分类是否已选择
+            const categoryId = document.getElementById('category_id').value;
+            if (!categoryId) {
+                showMessage('请选择分类', 'error');
+                return;
+            }
+            
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
-            formData.append('category_id', document.getElementById('category').value);
+            formData.append('category_id', categoryId);
             formData.append('finish_time', document.getElementById('finish_time').value);
             
             const notes = document.getElementById('notes').value;
@@ -142,8 +170,16 @@
             }
         });
 
-        // 设置默认时间为当前时间
-        document.getElementById('finish_time').value = new Date().toISOString().slice(0, 16);
+        // 设置默认日期为今天
+        document.getElementById('finish_time').value = new Date().toISOString().slice(0, 10);
+        
+        // 表单重置时清除分类选择
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            document.querySelectorAll('.category-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById('category_id').value = '';
+        });
 
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', loadCategories);
