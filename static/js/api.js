@@ -92,6 +92,9 @@ const ItemsAPI = {
     // 获取统计（别名，便于使用）
     getStatistics: (year) => apiRequest(`/items/statistics/year/${year}`),
     
+    // 获取有记录的年份列表
+    getAvailableYears: () => apiRequest('/items/years'),
+    
     // 添加图片
     addImages: async (itemId, formData) => {
         const url = `${API_BASE}/items/${itemId}/images`;

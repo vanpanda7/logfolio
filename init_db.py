@@ -18,10 +18,10 @@ def init_database():
         db = SessionLocal()
         try:
             default_categories = [
-                {"name": "影视", "user_defined": False},
-                {"name": "书籍", "user_defined": False},
-                {"name": "游戏", "user_defined": False},
-                {"name": "音乐", "user_defined": False},
+                # {"name": "影视", "user_defined": False},
+                # {"name": "书籍", "user_defined": False},
+                # {"name": "游戏", "user_defined": False},
+                # {"name": "音乐", "user_defined": False},
             ]
             
             for cat_data in default_categories:

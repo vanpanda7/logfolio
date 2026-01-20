@@ -34,7 +34,7 @@ function renderHeader(activePage = '') {
 /**
  * 创建统计信息卡片（整合筛选器）
  */
-function createStatisticsCard(stats, selectedCategoryId = '', selectedYear = '') {
+function createStatisticsCard(stats, selectedCategoryId = '', selectedYear = '', availableYears = []) {
     // 获取所有分类（用于显示"全部"选项）
     const categoryTabs = document.getElementById('category-filter-tabs');
     const allCategories = [];
@@ -47,16 +47,10 @@ function createStatisticsCard(stats, selectedCategoryId = '', selectedYear = '')
         });
     }
     
-    // 获取年份选项
-    const yearFilter = document.getElementById('year-filter');
-    const years = [];
-    if (yearFilter) {
-        yearFilter.querySelectorAll('option').forEach(opt => {
-            if (opt.value) {
-                years.push(opt.value);
-            }
-        });
-    }
+    // 使用传入的有记录的年份列表
+    const years = availableYears.length > 0 
+        ? availableYears.map(y => y.toString())
+        : [];
     
     // 构建分类分布（可点击筛选）
     let categoriesHTML = '';
@@ -103,7 +97,7 @@ function createStatisticsCard(stats, selectedCategoryId = '', selectedYear = '')
             <span class="stat-year-item ${isAllYearSelected ? 'active' : ''}" 
                   data-year="" 
                   onclick="filterByYear('')">
-                全部年份
+                全部
             </span>
         `;
         
@@ -168,8 +162,22 @@ async function showStatistics(year = null, categoryId = '') {
             year = currentYear.toString();
         }
         
-        statsContainer.innerHTML = createStatisticsCard(stats, categoryId, year);
+        // 获取有记录的年份列表
+        let availableYears = [];
+        try {
+            const yearsResponse = await ItemsAPI.getAvailableYears();
+            availableYears = yearsResponse.years || [];
+        } catch (error) {
+            console.error('获取年份列表失败:', error);
+        }
+        
+        statsContainer.innerHTML = createStatisticsCard(stats, categoryId, year, availableYears);
         statsContainer.classList.add('show');
+        
+        // 重新绑定筛选器事件（因为HTML被重新生成了）
+        if (typeof window.setupFilterEvents === 'function') {
+            window.setupFilterEvents();
+        }
     } catch (error) {
         console.error('加载统计信息失败:', error);
     }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logfolio - 个人年度文化成就墙</title>
+    <title>Logfolio - 个人年度成就墙</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -169,7 +169,8 @@
                 
                 // 更新统计信息（传入当前筛选条件）
                 const statsYear = params.year || new Date().getFullYear();
-                await showStatistics(statsYear.toString(), categoryId || params.category_id || '');
+                const statsCategoryId = categoryId || params.category_id || '';
+                await showStatistics(statsYear.toString(), statsCategoryId);
                 
                 loading.style.display = 'none';
                 
@@ -341,7 +342,7 @@
         }
 
         // 设置筛选器
-        function setupFilters() {
+        async function setupFilters() {
             // 创建年份选择器（如果不存在）
             let yearFilter = document.getElementById('year-filter');
             if (!yearFilter) {
@@ -356,25 +357,52 @@
                 yearFilter.style.display = 'none';
             }
             
-            // 填充年份选项
-            const years = getYearOptions(2020);
-            const currentYear = new Date().getFullYear();
-            
-            // 清空现有选项（除了第一个）
-            while (yearFilter.children.length > 1) {
-                yearFilter.removeChild(yearFilter.lastChild);
-            }
-            
-            years.forEach(year => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                // 设置当前年为默认选中
-                if (year === currentYear) {
-                    option.selected = true;
+            // 从API获取有记录的年份
+            try {
+                const response = await ItemsAPI.getAvailableYears();
+                const years = response.years || [];
+                const currentYear = new Date().getFullYear();
+                
+                // 清空现有选项（除了第一个）
+                while (yearFilter.children.length > 1) {
+                    yearFilter.removeChild(yearFilter.lastChild);
                 }
-                yearFilter.appendChild(option);
-            });
+                
+                // 如果有记录的年份列表为空，使用当前年
+                if (years.length === 0) {
+                    years.push(currentYear);
+                }
+                
+                years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    // 设置当前年为默认选中（如果存在）
+                    if (year === currentYear) {
+                        option.selected = true;
+                    }
+                    yearFilter.appendChild(option);
+                });
+                
+                // 如果没有当前年，默认选中第一个年份
+                if (!yearFilter.value && years.length > 0) {
+                    yearFilter.value = years[0];
+                }
+            } catch (error) {
+                console.error('获取年份列表失败:', error);
+                // 失败时使用默认年份列表
+                const years = getYearOptions(2020);
+                const currentYear = new Date().getFullYear();
+                years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    if (year === currentYear) {
+                        option.selected = true;
+                    }
+                    yearFilter.appendChild(option);
+                });
+            }
             
             // 设置滚动监听，显示搜索框
             setupScrollSearch();

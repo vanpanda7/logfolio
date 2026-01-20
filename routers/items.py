@@ -123,6 +123,16 @@ async def create_item(
     }
 
 
+@router.get("/years")
+def get_available_years(db: Session = Depends(get_db)):
+    """获取所有有记录的年份列表"""
+    from sqlalchemy import distinct
+    years = db.query(distinct(extract('year', Item.finish_time))).order_by(extract('year', Item.finish_time).desc()).all()
+    # 提取年份值并转换为整数列表
+    year_list = [int(year[0]) for year in years if year[0] is not None]
+    return {"years": year_list}
+
+
 @router.get("/", response_model=List[ItemResponse])
 def get_items(
     category_id: Optional[int] = None,
