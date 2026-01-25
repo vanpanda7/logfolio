@@ -2,49 +2,56 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from starlette.middleware.base import BaseHTTPMiddleware
+import logging
 
 from routers import categories, items
 
-# 创建 FastAPI 应用
-app = FastAPI(
-    title="Logfolio - 个人年度文化成就墙",
-    description="记录影视、书籍、游戏等文化成就的时间线系统",
-    version="1.0.0"
-)
+# 设为 True 时在控制台打印每个 /api 请求的 X-User-ID，便于排查「不同用户互相看见」：确认是否按用户变化
+LOG_X_USER_ID = True
+logger = logging.getLogger("uvicorn.error")
 
-# 配置 CORS（解决前端跨域问题）
+
+class XUserIDMiddleware(BaseHTTPMiddleware):
+    """从 OpenResty 的 X-User-ID 读取用户标识；无此头时用 default_user"""
+    async def dispatch(self, request, call_next):
+        raw = request.headers.get("X-User-ID") or "default_user"
+        request.state.user_id = raw.strip() or "default_user"
+        if LOG_X_USER_ID and request.url.path.startswith("/api/"):
+            logger.info(f"[X-User-ID] path={request.url.path} -> user_id={request.state.user_id!r}")
+        return await call_next(request)
+
+
+app = FastAPI(title="Logfolio", version="1.0.0")
+
+app.add_middleware(XUserIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应设置为具体域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 注册路由
 app.include_router(categories.router)
 app.include_router(items.router)
-
-# 配置静态文件服务
-# 上传的图片目录
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 前端页面路由
+
 @app.get("/")
 async def read_root():
-    """主页"""
     return FileResponse("templates/index.html")
+
 
 @app.get("/add")
 async def add_page():
-    """添加记录页"""
     return FileResponse("templates/add.html")
+
 
 @app.get("/manage-categories")
 async def manage_categories_page():
-    """管理分类页"""
     return FileResponse("templates/manage_categories.html")
+
 
 if __name__ == "__main__":
     import uvicorn

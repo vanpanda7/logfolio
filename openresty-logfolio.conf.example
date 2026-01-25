@@ -1,0 +1,29 @@
+# OpenResty 反向代理 Logfolio：从 Basic 认证取用户名，注入 X-User-ID
+# 把下面 location /api/ 合并进你现有的 server 块（如 listen 7878）
+
+    # /api/：从 Authorization: Basic 解析出用户名，设置 X-User-ID 后转发到 FastAPI
+    location /api/ {
+        set $uid "default_user";
+
+        access_by_lua_block {
+            local auth = ngx.var.http_authorization
+            if not auth then
+                auth = ngx.req.get_headers()["authorization"] or ngx.req.get_headers()["Authorization"]
+            end
+            if auth and auth:sub(1, 6) == "Basic " then
+                local b64 = auth:sub(7)
+                local ok, decoded = pcall(ngx.decode_base64, b64)
+                if ok and decoded then
+                    local user = decoded:match("^([^:]+)")
+                    if user and user ~= "" then
+                        ngx.var.uid = user
+                    end
+                end
+            end
+        }
+
+        proxy_set_header X-User-ID $uid;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
