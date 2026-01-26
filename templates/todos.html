@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待办 - Logfolio</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Confetti 动画库 -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <div class="container">
+            <div class="todos-header">
+                <h1>待办</h1>
+                <button class="btn btn-primary" onclick="showAddTodoModal()">+ 添加待办</button>
+            </div>
+
+            <!-- 加载提示 -->
+            <div id="loading" class="loading" style="display: none;">加载中...</div>
+            
+            <!-- 空状态 -->
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <div class="empty-icon">✨</div>
+                <p>还没有待办事项</p>
+                <button class="btn btn-primary" onclick="showAddTodoModal()">添加第一个待办</button>
+            </div>
+
+            <!-- 待办列表 -->
+            <div id="todos-list" class="todos-list"></div>
+        </div>
+    </main>
+
+    <!-- 添加待办模态框 -->
+    <div id="add-todo-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2>添加待办</h2>
+                <button class="modal-close" onclick="closeAddTodoModal()">✕</button>
+            </div>
+            <form id="add-todo-form" class="modal-content">
+                <div class="form-group">
+                    <label for="todo-title">标题 <span class="required">*</span></label>
+                    <input type="text" id="todo-title" name="title" required placeholder="输入待办事项...">
+                </div>
+                <div class="form-group">
+                    <label for="todo-category">分类 <span class="required">*</span></label>
+                    <div id="todo-category-tabs" class="category-tabs">
+                        <!-- 分类将通过 JavaScript 动态生成 -->
+                    </div>
+                    <input type="hidden" id="todo-category-id" name="category_id" required>
+                </div>
+                <div class="form-group">
+                    <label for="todo-due-time">预计完成时间</label>
+                    <input type="date" id="todo-due-time" name="due_time" placeholder="选择日期">
+                </div>
+                <div class="form-group">
+                    <label for="todo-notes">备注</label>
+                    <textarea id="todo-notes" name="notes" rows="3" placeholder="添加一些备注..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">添加</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTodoModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 编辑待办模态框 -->
+    <div id="edit-todo-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2>编辑待办</h2>
+                <button class="modal-close" onclick="closeEditTodoModal()">✕</button>
+            </div>
+            <form id="edit-todo-form" class="modal-content">
+                <input type="hidden" id="edit-todo-id" name="item_id">
+                <div class="form-group">
+                    <label for="edit-todo-title">标题 <span class="required">*</span></label>
+                    <input type="text" id="edit-todo-title" name="title" required placeholder="输入待办事项...">
+                </div>
+                <div class="form-group">
+                    <label for="edit-todo-category">分类 <span class="required">*</span></label>
+                    <div id="edit-todo-category-tabs" class="category-tabs">
+                        <!-- 分类将通过 JavaScript 动态生成 -->
+                    </div>
+                    <input type="hidden" id="edit-todo-category-id" name="category_id" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-todo-due-time">预计完成时间</label>
+                    <input type="date" id="edit-todo-due-time" name="due_time" placeholder="选择日期">
+                </div>
+                <div class="form-group">
+                    <label for="edit-todo-notes">备注</label>
+                    <textarea id="edit-todo-notes" name="notes" rows="3" placeholder="添加一些备注..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditTodoModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/todos.js"></script>
+</body>
+</html>

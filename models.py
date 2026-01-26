@@ -22,11 +22,18 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False, index=True)
-    finish_time = Column(DateTime, nullable=False, index=True)
+    
+    # 时间三剑客
+    due_time = Column(DateTime, nullable=True, index=True)      # 预计完成时间（待办用）
+    finish_time = Column(DateTime, nullable=True, index=True)  # 实际结束时间（完成时记录）
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 核心状态：False 为待办，True 为已完成记录
+    is_completed = Column(Boolean, default=False, index=True)
+    
     notes = Column(Text, nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     user_id = Column(String(64), nullable=False, index=True, default="default_user")
-    created_at = Column(DateTime, default=datetime.utcnow)
 
     category = relationship("Category", back_populates="items")
     images = relationship("ItemImage", back_populates="item", cascade="all, delete-orphan")

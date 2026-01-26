@@ -115,6 +115,33 @@ const ItemsAPI = {
     deleteImage: (imageId) => apiRequest(`/items/images/${imageId}`, {
         method: 'DELETE',
     }),
+    
+    // 获取年度墙数据
+    getAnnualGallery: (year) => apiRequest(`/items/annual-gallery/${year}`),
+    
+    // 获取待办列表
+    getTodos: () => apiRequest('/items/todos'),
+    
+    // 完成待办
+    completeTodo: (itemId) => apiRequest(`/items/${itemId}/complete`, {
+        method: 'PUT',
+    }),
+    
+    // 更新记录（支持待办和已完成记录）
+    update: async (itemId, formData) => {
+        const url = `${API_BASE}/items/${itemId}`;
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: formData, // FormData 不需要设置 Content-Type
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+        }
+        
+        return await response.json();
+    },
 };
 
 // 导出API对象

@@ -53,6 +53,16 @@ async def manage_categories_page():
     return FileResponse("templates/manage_categories.html")
 
 
+@app.get("/gallery")
+async def gallery_page():
+    return FileResponse("templates/gallery.html")
+
+
+@app.get("/todos")
+async def todos_page():
+    return FileResponse("templates/todos.html")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

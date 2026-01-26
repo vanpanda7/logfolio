@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>年度墙 - Logfolio</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <!-- 年度墙容器 -->
+        <div id="cool-gallery" class="gallery-wrapper">
+            <div class="gallery-info">
+                <h2 id="gallery-title">年度墙</h2>
+                <p id="gallery-stat">选择年份查看...</p>
+                <div class="gallery-year-selector">
+                    <select id="gallery-year-select" class="gallery-year-select">
+                        <option value="">选择年份</option>
+                    </select>
+                </div>
+            </div>
+            <div id="photo-wall" class="photo-masonry"></div>
+        </div>
+    </main>
+
+    <!-- 全屏影院模式 -->
+    <div id="fullscreen-viewer" class="fullscreen-viewer">
+        <button class="fullscreen-close" onclick="closeFullscreenViewer()">✕</button>
+        <div class="fullscreen-content">
+            <img id="fullscreen-image" src="" alt="">
+            <div class="fullscreen-info">
+                <h3 id="fullscreen-title"></h3>
+                <p id="fullscreen-date"></p>
+                <p id="fullscreen-category"></p>
+                <div id="fullscreen-notes" class="fullscreen-notes"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/components.js"></script>
+    <script src="/static/js/gallery.js"></script>
+</body>
+</html>

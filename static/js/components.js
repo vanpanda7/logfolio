@@ -15,6 +15,8 @@ function renderHeader(activePage = '') {
                 </div>
                 <nav class="nav">
                     <a href="/" class="nav-link ${activePage === 'index' ? 'active' : ''}">时间线</a>
+                    <a href="/todos" class="nav-link ${activePage === 'todos' ? 'active' : ''}">待办</a>
+                    <a href="/gallery" class="nav-link ${activePage === 'gallery' ? 'active' : ''}">年度墙</a>
                     <a href="/add" class="nav-link ${activePage === 'add' ? 'active' : ''}">记录</a>
                     <a href="/manage-categories" class="nav-link ${activePage === 'manage-categories' ? 'active' : ''}">分类</a>
                 </nav>
