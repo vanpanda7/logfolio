@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
+import os
 
 from routers import categories, items
+from config import UPLOAD_DIR
 
 # 设为 True 时在控制台打印每个 /api 请求的 X-User-ID，便于排查「不同用户互相看见」：确认是否按用户变化
 LOG_X_USER_ID = True
@@ -22,45 +23,36 @@ class XUserIDMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-app = FastAPI(title="Logfolio", version="1.0.0")
+app = FastAPI(title="Logfolio API", version="1.0.0", description="Logfolio 后端 API 服务")
 
 app.add_middleware(XUserIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # 生产环境建议指定具体的前端域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# 只包含 API 路由
 app.include_router(categories.router)
 app.include_router(items.router)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 提供上传文件的静态访问（如果需要）
+if os.path.exists(UPLOAD_DIR):
+    app.mount("/api/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.get("/")
-async def read_root():
-    return FileResponse("templates/index.html")
+async def root():
+    """API 根路径"""
+    return {"message": "Logfolio API", "version": "1.0.0"}
 
 
-@app.get("/add")
-async def add_page():
-    return FileResponse("templates/add.html")
-
-
-@app.get("/manage-categories")
-async def manage_categories_page():
-    return FileResponse("templates/manage_categories.html")
-
-
-@app.get("/gallery")
-async def gallery_page():
-    return FileResponse("templates/gallery.html")
-
-
-@app.get("/todos")
-async def todos_page():
-    return FileResponse("templates/todos.html")
+@app.get("/health")
+async def health():
+    """健康检查"""
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

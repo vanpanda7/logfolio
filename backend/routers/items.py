@@ -14,7 +14,7 @@ from config import UPLOAD_DIR
 from deps import get_user_id
 
 router = APIRouter(prefix="/api/items", tags=["items"])
-Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+# UPLOAD_DIR 在 config.py 中已经确保创建
 
 
 def _item_to_response(item):
@@ -87,7 +87,7 @@ async def create_item(
             path = os.path.join(UPLOAD_DIR, fn)
             with open(path, "wb") as buf:
                 buf.write(await f.read())
-            img = ItemImage(item_id=item.id, image_url=f"/static/uploads/{fn}")
+            img = ItemImage(item_id=item.id, image_url=f"/api/uploads/{fn}")
             db.add(img)
     db.commit()
     db.refresh(item)
@@ -244,7 +244,8 @@ def delete_item(item_id: int, db: Session = Depends(get_db), user_id: str = Depe
     if not item:
         raise HTTPException(status_code=404, detail="记录不存在")
     for img in item.images:
-        fp = img.image_url.replace("/static/uploads/", UPLOAD_DIR + "/")
+        # 兼容旧路径和新路径
+        fp = img.image_url.replace("/api/uploads/", UPLOAD_DIR + "/").replace("/static/uploads/", UPLOAD_DIR + "/")
         if os.path.exists(fp):
             try:
                 os.remove(fp)
@@ -273,7 +274,7 @@ async def add_images(
             path = os.path.join(UPLOAD_DIR, fn)
             with open(path, "wb") as buf:
                 buf.write(await f.read())
-            img = ItemImage(item_id=item.id, image_url=f"/static/uploads/{fn}")
+            img = ItemImage(item_id=item.id, image_url=f"/api/uploads/{fn}")
             db.add(img)
             out.append(img)
     db.commit()

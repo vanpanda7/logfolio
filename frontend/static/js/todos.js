@@ -9,7 +9,13 @@ let categories = [];
  * 初始化待办页面
  */
 async function initTodos() {
-    renderHeader('todos');
+    // 渲染头部导航（待办页面）
+    if (typeof window.renderHeader === 'function') {
+        window.renderHeader('todos');
+    } else {
+        console.error('renderHeader 函数未找到！请检查 components.js 是否已正确加载。');
+    }
+    
     await loadCategories();
     await loadTodos();
     setupAddTodoForm();

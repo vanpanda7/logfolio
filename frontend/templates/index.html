@@ -3,8 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Logfolio - 个人年度成就墙</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260127">
+    <script>
+        // 使用相对路径，通过 OpenResty 代理（包含认证）
+        window.API_BASE_URL = '/api';
+    </script>
 </head>
 <body>
     <div class="header-container"></div>
@@ -38,9 +45,9 @@
         </div>
     </main>
 
-    <script src="/static/js/api.js"></script>
-    <script src="/static/js/app.js"></script>
-    <script src="/static/js/components.js"></script>
+    <script src="/static/js/api.js?v=20260127"></script>
+    <script src="/static/js/app.js?v=20260127"></script>
+    <script src="/static/js/components.js?v=20260127"></script>
     <script>
         // 全局变量
         let allItems = [];
@@ -50,13 +57,45 @@
 
         // 初始化
         async function init() {
-            renderHeader('index');
-            setupSearch();
-            await loadCategories();
-            setupFilters(); // 先设置筛选器（包括默认年份）
-            // 使用默认年份加载数据
-            const currentYear = new Date().getFullYear();
-            await loadItems({ year: currentYear }, '', currentYear.toString());
+            console.log('页面初始化开始...');
+            console.log('API_BASE_URL:', window.API_BASE_URL || '/api');
+            console.log('当前页面 URL:', window.location.href);
+            
+            try {
+                // 渲染头部导航（首页）
+                if (typeof window.renderHeader === 'function') {
+                    window.renderHeader('index');
+                } else {
+                    console.error('renderHeader 函数未找到！');
+                }
+                setupSearch();
+                await loadCategories();
+                setupFilters(); // 先设置筛选器（包括默认年份）
+                // 使用默认年份加载数据
+                const currentYear = new Date().getFullYear();
+                await loadItems({ year: currentYear }, '', currentYear.toString());
+                console.log('页面初始化完成');
+            } catch (error) {
+                console.error('页面初始化失败:', error);
+                console.error('错误堆栈:', error.stack);
+                
+                // 显示更详细的错误信息
+                let errorMessage = '页面加载失败: ' + error.message;
+                if (error.status === 401) {
+                    errorMessage = '认证失败，请刷新页面并重新登录';
+                } else if (error.message.includes('网络')) {
+                    errorMessage = '网络连接失败，请检查网络或稍后重试';
+                }
+                
+                showMessage(errorMessage, 'error');
+                
+                // 在控制台显示更多调试信息
+                console.error('调试信息:', {
+                    API_BASE_URL: window.API_BASE_URL,
+                    currentURL: window.location.href,
+                    error: error
+                });
+            }
             
             // 设置默认选中状态
             setTimeout(() => {
@@ -104,7 +143,10 @@
         // 加载分类列表并渲染为 tab
         async function loadCategories() {
             try {
+                console.log('加载分类列表...');
+                console.log('调用 CategoriesAPI.getAll()...');
                 categories = await CategoriesAPI.getAll();
+                console.log('分类列表加载成功:', categories.length, '个分类');
                 
                 // 创建临时的分类tabs容器（用于获取HTML）
                 const tempContainer = document.createElement('div');
@@ -155,6 +197,7 @@
 
         // 加载记录列表
         async function loadItems(params = {}, categoryId = '', year = '') {
+            console.log('loadItems 调用:', { params, categoryId, year });
             const loading = document.getElementById('loading');
             const emptyState = document.getElementById('empty-state');
             const grid = document.getElementById('items-grid');
@@ -163,7 +206,9 @@
             grid.innerHTML = '';
             
             try {
+                console.log('加载记录列表...', params);
                 allItems = await ItemsAPI.getAll(params);
+                console.log('记录列表加载成功:', allItems.length, '条记录');
                 currentFilters = params;
                 filteredItems = [...allItems];
                 
@@ -182,8 +227,10 @@
                 emptyState.style.display = 'none';
                 renderItems(filteredItems);
             } catch (error) {
+                console.error('加载记录失败:', error);
                 loading.style.display = 'none';
                 showMessage('加载记录失败: ' + error.message, 'error');
+                // 避免无限重试，只显示错误信息
             }
         }
         
@@ -828,8 +875,199 @@
             }
         }
 
+        // 下拉刷新功能（清除缓存并重新加载）
+        let pullToRefresh = {
+            startY: 0,
+            currentY: 0,
+            isPulling: false,
+            threshold: 80, // 下拉阈值（像素）
+            refreshElement: null,
+            
+            init: function() {
+                this.refreshElement = document.getElementById('pull-to-refresh');
+                if (!this.refreshElement) return;
+                
+                // 监听触摸事件
+                document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+                document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+                document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+            },
+            
+            handleTouchStart: function(e) {
+                // 排除链接、按钮和 header 区域
+                const target = e.target;
+                if (target.closest('a') || target.closest('button') || target.closest('header')) {
+                    this.isPulling = false;
+                    return;
+                }
+                
+                // 只在页面顶部且向下滚动时触发
+                if (window.scrollY === 0) {
+                    this.startY = e.touches[0].clientY;
+                    this.isPulling = true;
+                }
+            },
+            
+            handleTouchMove: function(e) {
+                // 排除链接、按钮和 header 区域
+                const target = e.target;
+                if (target.closest('a') || target.closest('button') || target.closest('header')) {
+                    this.isPulling = false;
+                    this.resetUI();
+                    return;
+                }
+                
+                if (!this.isPulling) return;
+                
+                this.currentY = e.touches[0].clientY;
+                const deltaY = this.currentY - this.startY;
+                
+                // 只在下拉时触发
+                if (deltaY > 0 && window.scrollY === 0) {
+                    e.preventDefault(); // 阻止默认滚动
+                    
+                    const progress = Math.min(deltaY / this.threshold, 1);
+                    this.updateUI(progress, deltaY);
+                } else {
+                    this.resetUI();
+                }
+            },
+            
+            handleTouchEnd: function(e) {
+                // 排除链接、按钮和 header 区域
+                const target = e.target;
+                if (target.closest('a') || target.closest('button') || target.closest('header')) {
+                    this.isPulling = false;
+                    this.resetUI();
+                    return;
+                }
+                
+                if (!this.isPulling) return;
+                
+                const deltaY = this.currentY - this.startY;
+                
+                if (deltaY >= this.threshold) {
+                    // 触发刷新
+                    this.triggerRefresh();
+                } else {
+                    // 重置
+                    this.resetUI();
+                }
+                
+                this.isPulling = false;
+            },
+            
+            updateUI: function(progress, deltaY) {
+                if (!this.refreshElement) return;
+                
+                this.refreshElement.style.display = 'flex';
+                this.refreshElement.style.opacity = progress;
+                this.refreshElement.style.transform = `translateY(${Math.min(deltaY, this.threshold)}px)`;
+                
+                if (deltaY >= this.threshold) {
+                    this.refreshElement.querySelector('.pull-to-refresh-text').textContent = '释放以清除缓存并刷新';
+                    this.refreshElement.querySelector('.pull-to-refresh-icon').textContent = '⬆️';
+                } else {
+                    this.refreshElement.querySelector('.pull-to-refresh-text').textContent = '下拉刷新并清除缓存';
+                    this.refreshElement.querySelector('.pull-to-refresh-icon').textContent = '⬇️';
+                }
+            },
+            
+            resetUI: function() {
+                if (!this.refreshElement) return;
+                
+                this.refreshElement.style.display = 'none';
+                this.refreshElement.style.opacity = '0';
+                this.refreshElement.style.transform = 'translateY(0)';
+            },
+            
+            triggerRefresh: async function() {
+                if (!this.refreshElement) return;
+                
+                this.refreshElement.querySelector('.pull-to-refresh-text').textContent = '正在清除缓存...';
+                this.refreshElement.querySelector('.pull-to-refresh-icon').textContent = '🔄';
+                
+                try {
+                    // 清除所有缓存
+                    this.clearAllCache();
+                    
+                    // 显示提示
+                    showMessage('缓存已清除，正在重新加载...', 'success');
+                    
+                    // 重新加载数据
+                    await this.reloadData();
+                    
+                    // 重置UI
+                    setTimeout(() => {
+                        this.resetUI();
+                        showMessage('刷新完成！', 'success');
+                    }, 500);
+                    
+                } catch (error) {
+                    console.error('刷新失败:', error);
+                    showMessage('刷新失败: ' + error.message, 'error');
+                    this.resetUI();
+                }
+            },
+            
+            clearAllCache: function() {
+                // 清除 localStorage
+                try {
+                    localStorage.clear();
+                    console.log('已清除 localStorage');
+                } catch (e) {
+                    console.warn('清除 localStorage 失败:', e);
+                }
+                
+                // 清除 sessionStorage
+                try {
+                    sessionStorage.clear();
+                    console.log('已清除 sessionStorage');
+                } catch (e) {
+                    console.warn('清除 sessionStorage 失败:', e);
+                }
+                
+                // 清除所有缓存（通过添加时间戳强制重新加载资源）
+                const links = document.querySelectorAll('link[rel="stylesheet"]');
+                links.forEach(link => {
+                    if (link.href) {
+                        const url = new URL(link.href);
+                        url.searchParams.set('_t', Date.now());
+                        link.href = url.toString();
+                    }
+                });
+                
+                // 清除图片缓存（通过添加时间戳）
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    if (img.src && !img.src.includes('data:')) {
+                        const url = new URL(img.src);
+                        url.searchParams.set('_t', Date.now());
+                        img.src = url.toString();
+                    }
+                });
+                
+                console.log('已清除所有缓存');
+            },
+            
+            reloadData: async function() {
+                // 重新加载分类
+                await loadCategories();
+                
+                // 重新加载数据
+                const currentYear = new Date().getFullYear();
+                await loadItems({ year: currentYear }, '', currentYear.toString());
+                
+                // 重新设置筛选器
+                setupFilters();
+            }
+        };
+
         // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function() {
+            init();
+            pullToRefresh.init();
+        });
     </script>
 </body>
 </html>

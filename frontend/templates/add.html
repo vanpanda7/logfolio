@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logfolio</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        // 使用相对路径，通过 OpenResty 代理（包含认证）
+        window.API_BASE_URL = '/api';
+    </script>
 </head>
 <body>
     <div class="header-container"></div>
@@ -69,7 +73,11 @@
     <script>
         // 初始化头部
         document.addEventListener('DOMContentLoaded', function() {
-            renderHeader('add');
+            if (typeof window.renderHeader === 'function') {
+                window.renderHeader('add');
+            } else {
+                console.error('renderHeader 函数未找到！');
+            }
         });
         
         // 加载分类列表并渲染为 tab

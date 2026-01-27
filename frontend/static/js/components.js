@@ -4,8 +4,15 @@
 
 /**
  * 渲染公共头部导航
+ * 确保在所有浏览器中都能正常工作
  */
 function renderHeader(activePage = '') {
+    // 确保 DOM 已加载
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => renderHeader(activePage));
+        return;
+    }
+    
     const headerHTML = `
         <header class="header">
             <div class="container">
@@ -18,7 +25,7 @@ function renderHeader(activePage = '') {
                     <a href="/todos" class="nav-link ${activePage === 'todos' ? 'active' : ''}">待办</a>
                     <a href="/gallery" class="nav-link ${activePage === 'gallery' ? 'active' : ''}">年度墙</a>
                     <a href="/add" class="nav-link ${activePage === 'add' ? 'active' : ''}">记录</a>
-                    <a href="/manage-categories" class="nav-link ${activePage === 'manage-categories' ? 'active' : ''}">分类</a>
+                    <a href="/categories" class="nav-link ${activePage === 'categories' ? 'active' : ''}">分类</a>
                 </nav>
             </div>
         </header>
@@ -32,6 +39,9 @@ function renderHeader(activePage = '') {
         document.body.insertAdjacentHTML('afterbegin', headerHTML);
     }
 }
+
+// 立即导出到全局，确保在任何地方都能访问
+window.renderHeader = renderHeader;
 
 /**
  * 创建统计信息卡片（整合筛选器）

@@ -1,7 +1,6 @@
 #!/bin/bash
-# 启动脚本
 
-# 检查虚拟环境
+# 启动后端 API 服务
 if [ ! -d "venv" ]; then
     echo "创建虚拟环境..."
     python3 -m venv venv

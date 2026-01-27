@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logfolio</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        // 使用相对路径，通过 OpenResty 代理（包含认证）
+        window.API_BASE_URL = '/api';
+    </script>
 </head>
 <body>
     <div class="header-container"></div>
@@ -16,7 +20,7 @@
                 
                 <!-- 添加分类表单 -->
                 <div class="add-category-section">
-                    <h3>添加新分类</h3>
+                    <h3 style="margin-bottom: 10px;">添加新分类</h3>
                     <form id="add-category-form" class="form-inline">
                         <input type="text" id="category-name" placeholder="输入分类名称" required>
                         <button type="submit" class="btn btn-primary">添加</button>
@@ -35,12 +39,15 @@
     </main>
 
     <script src="/static/js/api.js"></script>
-    <script src="/static/js/app.js"></script>
     <script src="/static/js/components.js"></script>
     <script>
         // 初始化头部
         document.addEventListener('DOMContentLoaded', function() {
-            renderHeader('manage-categories');
+            if (typeof window.renderHeader === 'function') {
+                window.renderHeader('categories');
+            } else {
+                console.error('renderHeader 函数未找到！');
+            }
         });
         
         // 加载分类列表
@@ -76,8 +83,15 @@
             }
         }
 
-        // 添加分类
-        document.getElementById('add-category-form').addEventListener('submit', async function(e) {
+        // 添加分类（在 DOMContentLoaded 中绑定，确保元素存在）
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('add-category-form');
+            if (!form) {
+                console.error('找不到添加分类表单');
+                return;
+            }
+            
+            form.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const nameInput = document.getElementById('category-name');
@@ -96,10 +110,11 @@
             } catch (error) {
                 showMessage('添加失败: ' + error.message, 'error');
             }
+            });
         });
 
-        // 删除分类
-        async function deleteCategory(id, name) {
+        // 删除分类（需要导出为全局函数，因为 onclick 会调用）
+        window.deleteCategory = async function(id, name) {
             showConfirmDialog(`确定要删除分类 "${name}" 吗？`, async () => {
                 try {
                     await CategoriesAPI.delete(id);

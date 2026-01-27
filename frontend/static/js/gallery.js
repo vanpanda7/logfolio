@@ -12,27 +12,11 @@ let fullscreenViewer = null;
  */
 async function initCoolGallery() {
     // 渲染头部导航（年度墙页面）
-    // components.js 已经在 gallery.js 之前加载，所以 renderHeader 应该已经可用
-    try {
-        if (typeof window.renderHeader === 'function') {
-            window.renderHeader('gallery');
-        } else if (typeof renderHeader === 'function') {
-            renderHeader('gallery');
-        } else {
-            console.warn('renderHeader 未找到，尝试延迟加载...');
-            // 延迟一下再试（防止脚本加载顺序问题）
-            setTimeout(() => {
-                if (typeof window.renderHeader === 'function') {
-                    window.renderHeader('gallery');
-                } else if (typeof renderHeader === 'function') {
-                    renderHeader('gallery');
-                } else {
-                    console.error('renderHeader 函数未找到！请检查 components.js 是否已正确加载。');
-                }
-            }, 50);
-        }
-    } catch (error) {
-        console.error('渲染头部导航时出错:', error);
+    // 确保 renderHeader 已加载
+    if (typeof window.renderHeader === 'function') {
+        window.renderHeader('gallery');
+    } else {
+        console.error('renderHeader 函数未找到！请检查 components.js 是否已正确加载。');
     }
     
     // 获取年份列表
