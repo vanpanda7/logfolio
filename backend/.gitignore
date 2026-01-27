@@ -28,3 +28,4 @@ uploads/
 
 # 日志
 *.log
+config.py
