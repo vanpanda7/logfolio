@@ -1,1 +1,46 @@
-# 不需要忽略，前端文件都应该提交
+# Node modules
+node_modules/
+
+# 构建输出
+dist/
+build/
+.next/
+out/
+
+# 核心配置文件
+config.js
+config.local.js
+.env
+.env.local
+.env.*.local
+*.config
+*.conf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+.DS_Store
+
+# 日志
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 缓存
+.cache/
+.parcel-cache/
+.eslintcache
+
+# 上传文件
+uploads/
+static/uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp

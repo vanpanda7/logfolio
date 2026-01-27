@@ -11,21 +11,43 @@ ENV/
 # 环境变量
 .env
 .env.local
+.env.*.local
+
+# 核心配置文件
+config.py
+settings.py
+*.config
+*.conf
 
 # 上传文件
 uploads/
+static/uploads/
 *.jpg
 *.jpeg
 *.png
 *.gif
 *.webp
+*.bmp
+*.svg
+*.ico
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
 # 日志
 *.log
-config.py
+logs/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 临时文件
+*.tmp
+*.temp
+.cache/

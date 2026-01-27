@@ -127,9 +127,49 @@ function renderTodos(todosList) {
     
     todosListContainer.innerHTML = '';
     
+    // 按分类分组
+    const groupedTodos = {};
     todosList.forEach(todo => {
-        const todoItem = createTodoItem(todo);
-        todosListContainer.appendChild(todoItem);
+        const categoryName = todo.category_name || '未分类';
+        if (!groupedTodos[categoryName]) {
+            groupedTodos[categoryName] = [];
+        }
+        groupedTodos[categoryName].push(todo);
+    });
+    
+    // 渲染每个分组
+    Object.keys(groupedTodos).forEach(categoryName => {
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'todo-group';
+        
+        // 创建分组标题
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'todo-group-header';
+        
+        const groupTitle = document.createElement('h3');
+        groupTitle.className = 'todo-group-title';
+        groupTitle.textContent = categoryName;
+        
+        const groupCount = document.createElement('span');
+        groupCount.className = 'todo-group-count';
+        groupCount.textContent = `${groupedTodos[categoryName].length} 项`;
+        
+        groupHeader.appendChild(groupTitle);
+        groupHeader.appendChild(groupCount);
+        groupContainer.appendChild(groupHeader);
+        
+        // 创建分组内容容器
+        const groupContent = document.createElement('div');
+        groupContent.className = 'todo-group-content';
+        
+        // 渲染该分组下的所有待办
+        groupedTodos[categoryName].forEach(todo => {
+            const todoItem = createTodoItem(todo);
+            groupContent.appendChild(todoItem);
+        });
+        
+        groupContainer.appendChild(groupContent);
+        todosListContainer.appendChild(groupContainer);
     });
 }
 

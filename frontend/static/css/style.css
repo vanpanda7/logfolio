@@ -1994,7 +1994,67 @@ body {
 .todos-list {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
+}
+
+/* 分组容器 */
+.todo-group {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* 分组标题 */
+.todo-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, var(--primary-bg) 0%, #e0e7ff 100%);
+    border-bottom: 1px solid var(--border);
+}
+
+.todo-group-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.todo-group-count {
+    background: var(--primary);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* 分组内容 */
+.todo-group-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.todo-group-content .todo-item {
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    box-shadow: none;
+    padding: 1.25rem 1.5rem;
+    transition: all 0.2s ease;
+}
+
+.todo-group-content .todo-item:last-child {
+    border-bottom: none;
+}
+
+.todo-group-content .todo-item:hover {
+    background: var(--primary-bg);
+    transform: translateX(4px);
 }
 
 .todo-item {
