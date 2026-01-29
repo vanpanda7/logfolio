@@ -27,7 +27,6 @@ backend/uploads/
 *.gif
 *.webp
 *.bmp
-*.svg
 *.ico
 
 # 核心配置文件
