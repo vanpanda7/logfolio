@@ -7,9 +7,16 @@
  * 确保在所有浏览器中都能正常工作
  */
 function renderHeader(activePage = '') {
+    console.log('renderHeader 被调用，activePage:', activePage);
+    console.log('document.readyState:', document.readyState);
+    
     // 确保 DOM 已加载
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => renderHeader(activePage));
+        console.log('DOM 还在加载中，延迟执行 renderHeader');
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM 加载完成，执行 renderHeader');
+            renderHeader(activePage);
+        });
         return;
     }
     
@@ -32,12 +39,18 @@ function renderHeader(activePage = '') {
     `;
     
     const headerContainer = document.querySelector('.header-container');
+    console.log('headerContainer 是否存在:', !!headerContainer);
+    
     if (headerContainer) {
         headerContainer.innerHTML = headerHTML;
+        console.log('Header 已渲染到 .header-container');
     } else {
         // 如果没有容器，插入到body开头
+        console.log('未找到 .header-container，插入到 body 开头');
         document.body.insertAdjacentHTML('afterbegin', headerHTML);
     }
+    
+    console.log('renderHeader 执行完成');
 }
 
 // 立即导出到全局，确保在任何地方都能访问
