@@ -9,7 +9,6 @@
     <title>Logfolio</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260127">
     <script>
-        // 使用相对路径，通过 OpenResty 代理（包含认证）
         window.API_BASE_URL = '/api';
     </script>
 </head>
@@ -27,19 +26,39 @@
                 </div>
             </div>
 
-            <!-- 统计信息和筛选器整合面板 -->
-            <div id="statistics" class="statistics"></div>
+            <!-- 统计 + 年份 + 分类筛选（保留新设计） -->
+            <div id="statistics" class="home-stats">
+                <div class="home-stats-row">
+                    <div class="home-stat-total">
+                        <p class="home-stat-label">总记录数</p>
+                        <div class="home-stat-value-wrap">
+                            <span id="stat-total" class="home-stat-value">0</span>
+                            <span class="home-stat-unit">条目</span>
+                        </div>
+                    </div>
+                    <div class="home-year-wrap">
+                        <button type="button" id="year-dropdown-btn" class="home-year-btn">
+                            <span id="year-dropdown-label">2026</span>
+                            <span class="home-year-chevron">▼</span>
+                        </button>
+                        <div id="year-dropdown" class="home-year-dropdown" style="display: none;">
+                            <!-- 年份选项由 JS 填充 -->
+                        </div>
+                    </div>
+                </div>
+                <div id="filter-chips" class="home-chips">
+                    <!-- 由 JS 填充 -->
+                </div>
+            </div>
 
             <!-- 加载提示 -->
             <div id="loading" class="loading" style="display: none;">加载中...</div>
-            
             <!-- 空状态 -->
             <div id="empty-state" class="empty-state" style="display: none;">
                 <div class="empty-icon">🍂</div>
                 <p>这里还什么都没有</p>
                 <a href="/add" class="btn btn-primary">去记录一笔</a>
             </div>
-
             <!-- 海报墙容器 -->
             <div id="items-grid" class="items-grid"></div>
         </div>
@@ -58,11 +77,7 @@
         // 初始化
         async function init() {
             console.log('页面初始化开始...');
-            console.log('API_BASE_URL:', window.API_BASE_URL || '/api');
-            console.log('当前页面 URL:', window.location.href);
-            
             try {
-                // 渲染头部导航（首页）
                 if (typeof window.renderHeader === 'function') {
                     window.renderHeader('index');
                 } else {
@@ -70,10 +85,10 @@
                 }
                 setupSearch();
                 await loadCategories();
-                setupFilters(); // 先设置筛选器（包括默认年份）
-                // 使用默认年份加载数据
+                setupFilters();
                 const currentYear = new Date().getFullYear();
                 await loadItems({ year: currentYear }, '', currentYear.toString());
+                setupYearDropdownToggle();
                 console.log('页面初始化完成');
             } catch (error) {
                 console.error('页面初始化失败:', error);
@@ -96,46 +111,31 @@
                     error: error
                 });
             }
-            
-            // 设置默认选中状态
             setTimeout(() => {
-                const defaultYearItem = document.querySelector(`.stat-year-item[data-year="${currentYear}"]`);
-                if (defaultYearItem) {
-                    defaultYearItem.classList.add('active');
-                }
-                const allCategoryItem = document.querySelector('.stat-category-item[data-category-id=""]');
-                if (allCategoryItem) {
-                    allCategoryItem.classList.add('active');
-                }
+                const y = new Date().getFullYear();
+                const yearEl = document.querySelector('.stat-year-item[data-year="' + y + '"]');
+                if (yearEl) yearEl.classList.add('active');
+                const allCat = document.querySelector('.stat-category-item[data-category-id=""]');
+                if (allCat) allCat.classList.add('active');
             }, 100);
         }
-        
+
         // 设置搜索功能
         function setupSearch() {
             const searchInput = document.getElementById('search-input');
             const searchClear = document.getElementById('search-clear');
-            
             if (searchInput) {
                 searchInput.addEventListener('input', function(e) {
                     const value = e.target.value.trim();
-                    if (searchClear) {
-                        searchClear.style.display = value ? 'block' : 'none';
-                    }
-                    if (typeof window.handleSearch === 'function') {
-                        window.handleSearch(value);
-                    }
+                    if (searchClear) searchClear.style.display = value ? 'block' : 'none';
+                    if (typeof window.handleSearch === 'function') window.handleSearch(value);
                 });
             }
-            
-            if (searchClear) {
+            if (searchClear && searchInput) {
                 searchClear.addEventListener('click', function() {
-                    if (searchInput) {
-                        searchInput.value = '';
-                        searchClear.style.display = 'none';
-                        if (typeof window.handleSearch === 'function') {
-                            window.handleSearch('');
-                        }
-                    }
+                    searchInput.value = '';
+                    searchClear.style.display = 'none';
+                    if (typeof window.handleSearch === 'function') window.handleSearch('');
                 });
             }
         }
@@ -195,6 +195,81 @@
             }
         }
 
+        // 首页统计 + 年份下拉 + 筛选胶囊（新设计）
+        async function renderHomeStats(selectedYear, selectedCategoryId) {
+            const statTotalEl = document.getElementById('stat-total');
+            const yearLabelEl = document.getElementById('year-dropdown-label');
+            const yearDropdownEl = document.getElementById('year-dropdown');
+            const chipsContainer = document.getElementById('filter-chips');
+            if (!statTotalEl || !chipsContainer) return;
+            try {
+                const stats = await ItemsAPI.getStatistics(selectedYear || new Date().getFullYear());
+                let availableYears = [];
+                try {
+                    const res = await ItemsAPI.getAvailableYears();
+                    availableYears = (res.years || []).map(String);
+                } catch (e) {}
+                if (availableYears.length === 0) availableYears.push(String(new Date().getFullYear()));
+                statTotalEl.textContent = stats.total ?? 0;
+                yearLabelEl.textContent = selectedYear || '全部年份';
+                // 年份下拉
+                yearDropdownEl.innerHTML = '';
+                yearDropdownEl.style.display = 'none';
+                const allYearBtn = document.createElement('button');
+                allYearBtn.type = 'button';
+                allYearBtn.className = 'stat-year-item home-year-option' + (!selectedYear ? ' active' : '');
+                allYearBtn.dataset.year = '';
+                allYearBtn.textContent = '全部年份';
+                allYearBtn.addEventListener('click', function() { filterByYear(''); yearDropdownEl.style.display = 'none'; });
+                yearDropdownEl.appendChild(allYearBtn);
+                availableYears.forEach(y => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'stat-year-item home-year-option' + (selectedYear === y ? ' active' : '');
+                    btn.dataset.year = y;
+                    btn.textContent = y;
+                    btn.addEventListener('click', function() { filterByYear(y); yearDropdownEl.style.display = 'none'; });
+                    yearDropdownEl.appendChild(btn);
+                });
+                // 筛选胶囊：全部 + 各分类
+                const byCat = stats.by_category || {};
+                const totalCount = stats.total || 0;
+                chipsContainer.innerHTML = '';
+                const allChip = document.createElement('button');
+                allChip.type = 'button';
+                allChip.className = 'stat-category-item home-chip' + (!selectedCategoryId ? ' active' : '');
+                allChip.dataset.categoryId = '';
+                allChip.innerHTML = '<span>全部</span><span class="home-chip-count">' + totalCount + '</span>';
+                allChip.addEventListener('click', function() { filterByCategory(''); });
+                chipsContainer.appendChild(allChip);
+                Object.entries(byCat).forEach(([name, count]) => {
+                    const cat = categories.find(c => c.name === name);
+                    const cid = cat ? String(cat.id) : '';
+                    const isActive = selectedCategoryId && cid === String(selectedCategoryId);
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'stat-category-item home-chip' + (isActive ? ' active' : '');
+                    btn.dataset.categoryId = cid;
+                    btn.innerHTML = '<span>' + name + '</span><span class="home-chip-count">' + count + '</span>';
+                    btn.addEventListener('click', function() { filterByCategory(cid); });
+                    chipsContainer.appendChild(btn);
+                });
+            } catch (err) {
+                console.error('renderHomeStats:', err);
+            }
+        }
+
+        function setupYearDropdownToggle() {
+            const btn = document.getElementById('year-dropdown-btn');
+            const panel = document.getElementById('year-dropdown');
+            if (!btn || !panel) return;
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            });
+            document.addEventListener('click', function() { panel.style.display = 'none'; });
+        }
+
         // 加载记录列表
         async function loadItems(params = {}, categoryId = '', year = '') {
             console.log('loadItems 调用:', { params, categoryId, year });
@@ -212,10 +287,9 @@
                 currentFilters = params;
                 filteredItems = [...allItems];
                 
-                // 更新统计信息（传入当前筛选条件）
                 const statsYear = params.year || new Date().getFullYear();
                 const statsCategoryId = categoryId || params.category_id || '';
-                await showStatistics(statsYear.toString(), statsCategoryId);
+                await renderHomeStats(statsYear.toString(), statsCategoryId);
                 
                 loading.style.display = 'none';
                 
@@ -263,26 +337,16 @@
         function renderItems(items) {
             const grid = document.getElementById('items-grid');
             grid.innerHTML = '';
-            
             items.forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'item-card';
-                
-                // 点击整个卡片显示项目详情
                 card.onclick = (e) => {
-                    // 如果点击的是删除按钮，不触发详情显示
-                    if (e.target.closest('.item-delete-btn')) {
-                        return;
-                    }
+                    if (e.target.closest('.item-delete-btn')) return;
                     showItemDetail(item);
                 };
-                
-                // 封面图片（使用第一张图片，如果没有则显示占位符）
-                const coverImage = item.images && item.images.length > 0 
-                    ? item.images[0].image_url 
+                const coverImage = item.images && item.images.length > 0
+                    ? item.images[0].image_url
                     : '/static/images/placeholder.svg';
-                
-                // 简洁版卡片结构：适合移动端的视觉流，带左上角徽章
                 card.innerHTML = `
                     <div class="item-card-image">
                         <div class="item-badge">${item.category_name}</div>
@@ -291,99 +355,56 @@
                             <h3 class="item-title">${item.title}</h3>
                             <div class="item-meta">
                                 <span>${formatDate(item.finish_time)}</span>
-                                ${item.images && item.images.length > 1 ? `<span>📷 ${item.images.length}</span>` : ''}
+                                ${item.images && item.images.length > 1 ? '<span>📷 ' + item.images.length + '</span>' : ''}
                             </div>
                         </div>
                     </div>
                 `;
-                
-                // 添加删除按钮（悬停/长按时显示）
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'item-delete-btn';
                 deleteBtn.innerHTML = '🗑️';
                 deleteBtn.title = '删除';
                 deleteBtn.style.display = 'none';
-                
                 deleteBtn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // 阻止触发卡片点击事件
-                    showConfirmDialog('确定要删除这条记录吗？', () => {
-                        deleteItem(item.id);
-                    });
+                    e.stopPropagation();
+                    showConfirmDialog('确定要删除这条记录吗？', () => { deleteItem(item.id); });
                 });
-                
                 card.appendChild(deleteBtn);
-                
-                // 移动端：长按显示删除按钮（延长到2秒）
-                let longPressTimer;
-                let isLongPress = false;
-                let deleteBtnVisible = false;
-                
+                let longPressTimer, isLongPress = false, deleteBtnVisible = false;
                 card.addEventListener('touchstart', function(e) {
                     isLongPress = false;
                     longPressTimer = setTimeout(() => {
                         isLongPress = true;
                         deleteBtnVisible = true;
                         e.preventDefault();
-                        // 显示删除按钮
                         deleteBtn.style.display = 'flex';
-                        // 添加震动反馈（如果支持）
-                        if (navigator.vibrate) {
-                            navigator.vibrate([50, 30, 50]);
-                        }
-                        // 添加视觉反馈
+                        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
                         card.style.transform = 'scale(0.98)';
-                        setTimeout(() => {
-                            card.style.transform = '';
-                        }, 200);
-                    }, 2000); // 改为2秒
+                        setTimeout(() => { card.style.transform = ''; }, 200);
+                    }, 2000);
                 });
-                
                 card.addEventListener('touchend', function() {
                     clearTimeout(longPressTimer);
-                    // 如果长按完成，保持按钮显示
-                    if (isLongPress && deleteBtnVisible) {
-                        // 按钮保持显示，直到用户点击删除或点击其他地方
-                        return;
-                    }
-                    // 如果未完成长按，隐藏按钮
-                    if (!isLongPress) {
-                        deleteBtn.style.display = 'none';
-                    }
+                    if (!isLongPress) deleteBtn.style.display = 'none';
                 });
-                
                 card.addEventListener('touchmove', function() {
                     clearTimeout(longPressTimer);
                     isLongPress = false;
                     deleteBtnVisible = false;
                     deleteBtn.style.display = 'none';
                 });
-                
-                // 点击卡片其他地方时，如果删除按钮已显示，则隐藏它
                 card.addEventListener('click', function(e) {
-                    // 如果点击的不是删除按钮，且删除按钮已显示，则隐藏它
                     if (deleteBtnVisible && e.target !== deleteBtn && !deleteBtn.contains(e.target)) {
                         deleteBtn.style.display = 'none';
                         deleteBtnVisible = false;
                     }
                 });
-                
-                // PC端：悬停显示删除按钮
-                card.addEventListener('mouseenter', function() {
-                    deleteBtn.style.display = 'flex';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    deleteBtn.style.display = 'none';
-                });
-                
-                // PC端右键菜单删除
+                card.addEventListener('mouseenter', function() { deleteBtn.style.display = 'flex'; });
+                card.addEventListener('mouseleave', function() { deleteBtn.style.display = 'none'; });
                 card.addEventListener('contextmenu', function(e) {
                     e.preventDefault();
-                    showConfirmDialog('确定要删除这条记录吗？', () => {
-                        deleteItem(item.id);
-                    });
+                    showConfirmDialog('确定要删除这条记录吗？', () => { deleteItem(item.id); });
                 });
-                
                 grid.appendChild(card);
             });
         }
@@ -537,10 +558,10 @@
 
         // 通过分类筛选
         window.filterByCategory = function(categoryId) {
-            // 更新分类选中状态
+            const id = String(categoryId ?? '');
             document.querySelectorAll('.stat-category-item').forEach(item => {
                 item.classList.remove('active');
-                if (item.dataset.categoryId === categoryId) {
+                if (item.dataset.categoryId === id) {
                     item.classList.add('active');
                 }
             });
@@ -550,21 +571,13 @@
             const year = activeYearItem ? activeYearItem.dataset.year : '';
             
             const params = {};
-            if (categoryId) params.category_id = categoryId;
+            if (id) params.category_id = parseInt(id, 10) || id;
             if (year) params.year = parseInt(year);
-            
-            // 清除搜索框
             const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.value = '';
-                if (typeof window.handleSearch === 'function') {
-                    window.handleSearch('');
-                }
-            }
+            if (searchInput) { searchInput.value = ''; if (typeof window.handleSearch === 'function') window.handleSearch(''); }
             const searchClear = document.getElementById('search-clear');
             if (searchClear) searchClear.style.display = 'none';
-            
-            loadItems(params, categoryId, year);
+            loadItems(params, id, year);
         };
         
         // 通过年份筛选

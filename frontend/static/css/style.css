@@ -683,6 +683,150 @@ body {
     transform: scale(0.95);
 }
 
+/* 首页：总记录数 + 年份 + 分类筛选（胶囊） */
+.home-stats {
+    margin-bottom: 1.5rem;
+}
+.home-stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1rem;
+}
+.home-stat-total {
+    flex: 1;
+}
+.home-stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-sub);
+    margin-bottom: 0.25rem;
+}
+.home-stat-value-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+}
+.home-stat-value {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+.home-stat-unit {
+    color: var(--text-sub);
+    font-size: 0.95rem;
+}
+.home-year-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+.home-year-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+}
+.home-year-btn:hover {
+    background: var(--bg-body);
+}
+.home-year-chevron {
+    font-size: 0.65rem;
+    color: var(--text-sub);
+}
+.home-year-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    width: 10rem;
+    max-height: 15rem;
+    overflow-y: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 4px 0;
+    z-index: 20;
+}
+.home-year-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--text-main);
+}
+.home-year-option:hover {
+    background: var(--primary-bg);
+}
+.home-year-option.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-weight: 500;
+}
+.home-chips {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    -webkit-overflow-scrolling: touch;
+}
+.home-chips::-webkit-scrollbar {
+    display: none;
+}
+.home-chips {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.home-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--text-sub);
+    cursor: pointer;
+}
+.home-chip:hover {
+    border-color: var(--primary);
+    color: var(--text-main);
+}
+.home-chip.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+.home-chip.active .home-chip-count {
+    background: rgba(255,255,255,0.3);
+    color: #fff;
+}
+.home-chip-count {
+    font-size: 0.75rem;
+    color: var(--text-sub);
+}
+.home-chip.active .home-chip-count {
+    color: #fff;
+}
+
 .form-container h2 {
     margin-bottom: 1.5rem;
     color: var(--text-main);
@@ -1641,6 +1785,7 @@ body {
 }
 
 .gallery-info {
+    position: relative;
     text-align: center;
     margin-bottom: 40px;
     color: white;
@@ -1703,6 +1848,75 @@ body {
 
 .gallery-year-select option {
     background: #1a1a2e;
+    color: white;
+}
+
+/* 年度墙：标题即年份选择按钮 + 隐藏下拉 */
+.gallery-title-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    /* padding: 0.25em 0.5em; */
+    margin: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.gallery-title-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+.gallery-title-chevron {
+    font-size: 0.4em;
+    -webkit-text-fill-color: initial;
+    color: rgba(255, 255, 255, 0.7);
+    transition: transform 0.2s ease;
+}
+.gallery-title-btn[aria-expanded="true"] .gallery-title-chevron {
+    transform: rotate(180deg);
+}
+.gallery-info .gallery-year-dropdown {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 100%;
+    margin-top: 8px;
+    min-width: 120px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: rgba(26, 26, 46, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 6px 0;
+    z-index: 20;
+}
+.gallery-year-option {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+.gallery-year-option:hover {
+    background: rgba(255, 255, 255, 0.1);
     color: white;
 }
 

@@ -19,51 +19,66 @@ async function initCoolGallery() {
         console.error('renderHeader 函数未找到！请检查 components.js 是否已正确加载。');
     }
     
-    // 获取年份列表
+    // 获取年份列表，构建隐藏的年份下拉
     try {
         const response = await ItemsAPI.getAvailableYears();
         const years = response.years || [];
         const currentYear = new Date().getFullYear();
         
-        const yearSelect = document.getElementById('gallery-year-select');
-        if (yearSelect) {
-            // 清空现有选项（除了第一个）
-            while (yearSelect.children.length > 1) {
-                yearSelect.removeChild(yearSelect.lastChild);
-            }
-            
-            // 添加年份选项
+        const titleBtn = document.getElementById('gallery-title-btn');
+        const titleSpan = document.getElementById('gallery-title');
+        const dropdown = document.getElementById('gallery-year-dropdown');
+        
+        if (dropdown) {
+            dropdown.innerHTML = '';
             years.forEach(year => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                if (year === currentYear) {
-                    option.selected = true;
-                    currentGalleryYear = currentYear;
-                }
-                yearSelect.appendChild(option);
+                const opt = document.createElement('button');
+                opt.type = 'button';
+                opt.role = 'option';
+                opt.className = 'gallery-year-option';
+                opt.dataset.year = year;
+                opt.textContent = year;
+                opt.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const y = parseInt(this.dataset.year, 10);
+                    if (titleSpan) titleSpan.textContent = `${y} RECAP`;
+                    dropdown.style.display = 'none';
+                    if (titleBtn) {
+                        titleBtn.setAttribute('aria-expanded', 'false');
+                        titleBtn.setAttribute('aria-label', '选择年份');
+                    }
+                    if (dropdown) dropdown.setAttribute('aria-hidden', 'true');
+                    loadGalleryYear(y);
+                });
+                dropdown.appendChild(opt);
             });
-            
-            // 如果没有当前年，默认选中第一个
-            if (!yearSelect.value && years.length > 0) {
-                yearSelect.value = years[0];
-                currentGalleryYear = parseInt(years[0]);
-            }
-            
-            // 绑定年份选择事件
-            yearSelect.addEventListener('change', async function() {
-                const selectedYear = parseInt(this.value);
-                if (selectedYear) {
-                    await loadGalleryYear(selectedYear);
-                } else {
-                    clearGallery();
+        }
+        
+        if (titleBtn) {
+            titleBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const isOpen = dropdown && dropdown.style.display === 'block';
+                if (dropdown) {
+                    dropdown.style.display = isOpen ? 'none' : 'block';
+                    dropdown.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
                 }
+                titleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
             });
-            
-            // 如果已选中年份，自动加载
-            if (yearSelect.value) {
-                await loadGalleryYear(parseInt(yearSelect.value));
+        }
+        
+        document.addEventListener('click', function() {
+            if (dropdown) {
+                dropdown.style.display = 'none';
+                dropdown.setAttribute('aria-hidden', 'true');
             }
+            if (titleBtn) titleBtn.setAttribute('aria-expanded', 'false');
+        });
+        
+        // 默认加载当前年或第一个年份
+        const yearToLoad = years.indexOf(currentYear) >= 0 ? currentYear : (years[0] ? parseInt(years[0]) : null);
+        if (yearToLoad) {
+            if (titleSpan) titleSpan.textContent = `${yearToLoad} RECAP`;
+            await loadGalleryYear(yearToLoad);
         }
     } catch (error) {
         console.error('获取年份列表失败:', error);
@@ -82,20 +97,13 @@ async function initCoolGallery() {
 async function loadGalleryYear(year) {
     const photoWall = document.getElementById('photo-wall');
     const galleryTitle = document.getElementById('gallery-title');
-    const galleryStat = document.getElementById('gallery-stat');
     
     if (!photoWall) return;
     
-    // 更新标题和统计
     if (galleryTitle) {
         galleryTitle.textContent = `${year} RECAP`;
     }
     
-    if (galleryStat) {
-        galleryStat.textContent = '加载中...';
-    }
-    
-    // 清空现有内容
     photoWall.innerHTML = '';
     
     try {
@@ -104,16 +112,8 @@ async function loadGalleryYear(year) {
         currentGalleryYear = year;
         
         if (photos.length === 0) {
-            if (galleryStat) {
-                galleryStat.textContent = `这一年还没有带图片的记录`;
-            }
             photoWall.innerHTML = '<div class="empty-state" style="color: rgba(255,255,255,0.7); padding: 3rem;"><div class="empty-icon">📷</div><p>这一年还没有带图片的记录</p></div>';
             return;
-        }
-        
-        // 更新统计信息
-        if (galleryStat) {
-            galleryStat.textContent = `共 ${photos.length} 个精彩瞬间`;
         }
         
         // 渲染照片墙
@@ -144,9 +144,6 @@ async function loadGalleryYear(year) {
         console.error('加载年度墙失败:', error);
         if (typeof showMessage === 'function') {
             showMessage('加载年度墙失败: ' + error.message, 'error');
-        }
-        if (galleryStat) {
-            galleryStat.textContent = '加载失败，请重试';
         }
     }
 }
@@ -249,11 +246,11 @@ function closeFullscreenViewer() {
 function clearGallery() {
     const photoWall = document.getElementById('photo-wall');
     const galleryTitle = document.getElementById('gallery-title');
-    const galleryStat = document.getElementById('gallery-stat');
+    const dropdown = document.getElementById('gallery-year-dropdown');
     
     if (photoWall) photoWall.innerHTML = '';
     if (galleryTitle) galleryTitle.textContent = '年度墙';
-    if (galleryStat) galleryStat.textContent = '选择年份查看...';
+    if (dropdown) dropdown.style.display = 'none';
     currentGalleryData = [];
     currentGalleryYear = null;
 }

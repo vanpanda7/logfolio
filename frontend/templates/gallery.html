@@ -20,12 +20,12 @@
         <!-- 年度墙容器 -->
         <div id="cool-gallery" class="gallery-wrapper">
             <div class="gallery-info">
-                <h2 id="gallery-title">年度墙</h2>
-                <p id="gallery-stat">选择年份查看...</p>
-                <div class="gallery-year-selector">
-                    <select id="gallery-year-select" class="gallery-year-select">
-                        <option value="">选择年份</option>
-                    </select>
+                <button type="button" id="gallery-title-btn" class="gallery-title-btn" aria-expanded="false" aria-haspopup="listbox" aria-label="选择年份">
+                    <span id="gallery-title">年度墙</span>
+                    <span class="gallery-title-chevron" style="display: none;">▼</span>
+                </button>
+                <div id="gallery-year-dropdown" class="gallery-year-dropdown" role="listbox" style="display: none;" aria-hidden="true">
+                    <!-- 年份选项由 JS 填充 -->
                 </div>
             </div>
             <div id="photo-wall" class="photo-masonry"></div>
