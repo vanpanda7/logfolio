@@ -466,6 +466,16 @@ function editTodo(itemId) {
 }
 
 /**
+ * 清除编辑表单中的预计完成时间（改为无期限）
+ */
+function clearEditDueTime() {
+    const input = document.getElementById('edit-todo-due-time');
+    if (input) {
+        input.value = '';
+    }
+}
+
+/**
  * 关闭编辑待办模态框
  */
 function closeEditTodoModal() {
@@ -564,12 +574,11 @@ function setupEditTodoForm() {
         submitData.append('category_id', categoryId);
         
         const dueTime = formData.get('due_time');
-        console.log('编辑待办 - 截止时间:', dueTime);
         if (dueTime) {
             submitData.append('due_time', dueTime);
         } else {
-            // 如果清空了截止时间，需要传递空字符串来清除
-            submitData.append('due_time', '');
+            // 后端会把空表单值转为 None，无法区分「未传」和「传空」，所以用 clear_due_time=1 表示清除为无期限
+            submitData.append('clear_due_time', '1');
         }
         
         const notes = formData.get('notes');
@@ -608,6 +617,7 @@ window.editTodo = editTodo;
 window.showAddTodoModal = showAddTodoModal;
 window.closeAddTodoModal = closeAddTodoModal;
 window.closeEditTodoModal = closeEditTodoModal;
+window.clearEditDueTime = clearEditDueTime;
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', initTodos);

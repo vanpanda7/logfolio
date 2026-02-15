@@ -156,7 +156,8 @@
             formData.append('title', document.getElementById('title').value);
             formData.append('category_id', categoryId);
             formData.append('finish_time', document.getElementById('finish_time').value);
-            
+            formData.append('is_completed', 'true');  // 标记为已完成记录
+
             const notes = document.getElementById('notes').value;
             if (notes) {
                 formData.append('notes', notes);

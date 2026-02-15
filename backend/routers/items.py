@@ -121,6 +121,7 @@ async def update_item(
     title: Optional[str] = Form(None),
     finish_time: Optional[str] = Form(None),
     due_time: Optional[str] = Form(None),
+    clear_due_time: Optional[str] = Form(None),  # 前端传 "1" 表示清除预计完成时间（FastAPI 会把空表单值转为 None，无法区分「未传」和「传空」）
     category_id: Optional[int] = Form(None),
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -152,14 +153,14 @@ async def update_item(
         else:
             item.finish_time = None
     
-    if due_time is not None:
-        if due_time and due_time.strip():
-            try:
-                item.due_time = datetime.strptime(due_time.strip(), "%Y-%m-%d")
-            except ValueError:
-                raise HTTPException(status_code=400, detail="预计完成日期请用 YYYY-MM-DD")
-        else:
-            item.due_time = None
+    # 预计完成时间：显式清除（clear_due_time=1）或传了有效日期才更新（FastAPI 会把空字符串转成 None，无法用 due_time='' 表示清除）
+    if clear_due_time in ("1", "true", "yes"):
+        item.due_time = None
+    elif due_time and due_time.strip():
+        try:
+            item.due_time = datetime.strptime(due_time.strip(), "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="预计完成日期请用 YYYY-MM-DD")
     
     db.commit()
     db.refresh(item)

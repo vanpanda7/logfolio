@@ -771,6 +771,21 @@ body {
     color: var(--text-sub);
 }
 
+/* 预计完成时间：日期输入 + 清除按钮 同一行 */
+.form-group .due-time-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.form-group .due-time-row input[type="date"] {
+    flex: 1;
+    min-width: 0;
+}
+.form-group .due-time-row .btn-clear-due {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .form-group input[type="date"]:valid::-webkit-datetime-edit {
     color: var(--text-main);
     font-weight: 500;
