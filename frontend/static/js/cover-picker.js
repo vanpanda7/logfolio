@@ -5,7 +5,7 @@
 (function () {
     var overlay = null;
     var currentOnSelect = null;
-    var searchState = { q: '', page: 1, loading: false, loadingMore: false, hasNextPage: false };
+    var searchState = { q: '', page: 1, loading: false, loadingMore: false, hasNextPage: false, searchType: 'both' };
     var apiBase = function () { return window.API_BASE_URL || '/api'; };
 
     function getOverlay() {
@@ -18,7 +18,7 @@
             '<div class="cover-picker-backdrop"></div>' +
             '<div class="cover-picker-sheet">' +
             '  <div class="cover-picker-header">' +
-            '    <input type="text" id="cover-picker-search-input" class="cover-picker-search-input" placeholder="支持中文、英文、日文，输入动漫或漫画名">' +
+            '    <input type="text" id="cover-picker-search-input" class="cover-picker-search-input" placeholder="支持中文、英文、日文">' +
             '    <button type="button" id="cover-picker-search-btn" class="btn btn-primary">搜索</button>' +
             '    <button type="button" id="cover-picker-close-btn" class="cover-picker-close-btn" aria-label="关闭">✕</button>' +
             '  </div>' +
@@ -96,14 +96,15 @@
         var loadingEl = overlay.querySelector('#cover-picker-loading');
         var q = (input && input.value) ? input.value.trim() : '';
         if (!q) {
-            if (typeof window.showMessage === 'function') window.showMessage('请输入要搜索的动漫或漫画名', 'error');
+            if (typeof window.showMessage === 'function') window.showMessage('请输入要搜索的关键词', 'error');
             return;
         }
-        searchState = { q: q, page: 1, loading: true, loadingMore: false, hasNextPage: false };
+        var searchType = searchState.searchType || 'both';
+        searchState = { q: q, page: 1, loading: true, loadingMore: false, hasNextPage: false, searchType: searchType };
         resultsEl.innerHTML = '';
         loadingEl.style.display = 'flex';
         try {
-            var r = await fetch(apiBase() + '/anime-search?q=' + encodeURIComponent(q) + '&type=both&page=1&source=both');
+            var r = await fetch(apiBase() + '/anime-search?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(searchType) + '&page=1&source=both');
             if (!r.ok) throw new Error(r.statusText || '请求失败');
             var json = await r.json();
             var items = json.data || [];
@@ -133,7 +134,8 @@
         resultsEl.appendChild(loadMoreNode);
         var nextPage = searchState.page + 1;
         try {
-            var r = await fetch(apiBase() + '/anime-search?q=' + encodeURIComponent(searchState.q) + '&type=both&page=' + nextPage + '&source=both');
+            var searchType = searchState.searchType || 'both';
+            var r = await fetch(apiBase() + '/anime-search?q=' + encodeURIComponent(searchState.q) + '&type=' + encodeURIComponent(searchType) + '&page=' + nextPage + '&source=both');
             if (!r.ok) throw new Error(r.statusText || '请求失败');
             var json = await r.json();
             var items = json.data || [];
@@ -150,8 +152,11 @@
 
     function open(options) {
         options = options || {};
+        var searchType = (options.searchType === 'game') ? 'game' : 'both';
+        searchState.searchType = searchType;
         var el = getOverlay();
         var searchInput = el.querySelector('#cover-picker-search-input');
+        searchInput.placeholder = searchType === 'game' ? '输入游戏名搜索封面（Bangumi）' : '输入动漫或漫画名搜索';
         var initialSearch = (options.initialSearch != null) ? String(options.initialSearch).trim() : '';
         searchInput.value = initialSearch;
         currentOnSelect = options.onSelect || null;

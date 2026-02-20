@@ -90,6 +90,17 @@
                 const currentYear = new Date().getFullYear();
                 await loadItems({ year: currentYear }, '', currentYear.toString());
                 setupYearDropdownToggle();
+                // 从动漫页点击卡片跳转：/?item_id=xxx 时自动打开该条详情
+                var urlParams = new URLSearchParams(window.location.search);
+                var openItemId = urlParams.get('item_id');
+                if (openItemId) {
+                    try {
+                        var item = await ItemsAPI.getById(openItemId);
+                        if (item) showItemDetail(item);
+                    } catch (e) {
+                        if (typeof showMessage === 'function') showMessage('未找到该记录', 'error');
+                    }
+                }
                 console.log('页面初始化完成');
             } catch (error) {
                 console.error('页面初始化失败:', error);
@@ -713,6 +724,7 @@
             // 存储当前item数据到overlay，方便后续更新
             overlay.dataset.itemId = item.id;
             overlay.dataset.currentImages = JSON.stringify(item.images || []);
+            overlay.dataset.categoryName = item.category_name || '';
             
             // 为图片添加点击事件（查看大图）
             const imageItems = dialog.querySelectorAll('.item-detail-image-item');
@@ -755,8 +767,11 @@
         function openDetailCoverPicker(itemId, overlay) {
             var titleEl = overlay.querySelector('.item-detail-title');
             var initialSearch = titleEl ? titleEl.textContent.trim() : '';
+            var categoryName = overlay.dataset.categoryName || '';
+            var searchType = (categoryName.indexOf('游戏') !== -1) ? 'game' : 'both';
             CoverPicker.open({
                 initialSearch: initialSearch,
+                searchType: searchType,
                 onSelect: function(coverUrl) {
                     ItemsAPI.addCoverFromUrl(itemId, coverUrl).then(function(newImages) {
                         // 接口返回该条目的完整图片列表（新封面已插在最前），直接替换

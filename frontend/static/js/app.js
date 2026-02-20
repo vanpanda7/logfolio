@@ -33,10 +33,12 @@ function formatDateTime(dateString) {
 }
 
 /**
- * 格式化日期（仅日期部分）
+ * 格式化日期（仅日期部分）；无时间或无效时返回 "—"
  */
 function formatDate(dateString) {
+    if (dateString == null || dateString === '') return '—';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '—';
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');

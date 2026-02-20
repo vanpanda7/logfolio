@@ -45,6 +45,7 @@ async def create_item(
     notes: Optional[str] = Form(None),
     is_completed: Optional[bool] = Form(False),
     cover_image_url: Optional[str] = Form(None),  # 动漫/漫画封面 URL（来自 Jikan/MAL），后端拉取并保存
+    skip_finish_time: Optional[str] = Form(None),  # 传 "1" 表示不记录完成时间（如动漫模块统一 NA）
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id),
@@ -55,9 +56,9 @@ async def create_item(
     
     # 解析时间
     finish_datetime = None
-    if finish_time:
+    if finish_time and finish_time.strip():
         try:
-            finish_datetime = datetime.strptime(finish_time, "%Y-%m-%d")
+            finish_datetime = datetime.strptime(finish_time.strip(), "%Y-%m-%d")
         except ValueError:
             raise HTTPException(status_code=400, detail="完成日期请用 YYYY-MM-DD")
     
@@ -68,9 +69,10 @@ async def create_item(
         except ValueError:
             raise HTTPException(status_code=400, detail="预计完成日期请用 YYYY-MM-DD")
     
-    # 如果标记为已完成但没有 finish_time，使用当前时间
-    if is_completed and not finish_datetime:
-        finish_datetime = datetime.utcnow()
+    # 若明确不记录完成时间（如动漫），则保持 None；否则已完成但未填时用当前时间
+    if not (skip_finish_time and str(skip_finish_time).strip().lower() in ("1", "true", "yes")):
+        if is_completed and not finish_datetime:
+            finish_datetime = datetime.utcnow()
     
     item = Item(
         title=title,

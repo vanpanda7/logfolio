@@ -59,28 +59,38 @@ def _bangumi_subject_to_item(s):
     name = (s.get("name") or "").strip()
     title = name_cn or name
     stype = s.get("type")
-    type_label = "漫画" if stype == 1 else "动漫"
+    if stype == 1:
+        type_label = "漫画"
+    elif stype == 4:
+        type_label = "游戏"
+    else:
+        type_label = "动漫"
     return {"type": type_label, "title": title, "title_japanese": name if not name_cn else "", "url": url}
 
 
 @app.get("/api/anime-search")
 async def anime_search(
     q: str = Query(..., min_length=1),
-    type: str = Query("both", regex="^(anime|manga|both)$"),
+    type: str = Query("both", regex="^(anime|manga|both|game|all)$"),
     page: int = Query(1, ge=1),
     source: str = Query("both", regex="^(mal|bangumi|both)$"),
 ):
-    """搜索动漫/漫画封面：source=mal 仅英文/日文(MAL)，bangumi 支持中文，both 同时搜并合并"""
+    """搜索动漫/漫画/游戏封面：type=game 仅 Bangumi 游戏，all=动漫+漫画+游戏"""
     items_list = []
     has_next_page = False
     limit_per_page = 24
 
-    # Bangumi（支持中文搜索）
-    if source in ("bangumi", "both"):
+    # Bangumi（支持中文搜索，含动漫/漫画/游戏）
+    if source in ("bangumi", "both") and type != "anime" and type != "manga":
         try:
-            filter_types = [2]  # 动画
-            if type in ("manga", "both"):
-                filter_types.append(1)  # 书籍
+            if type == "game":
+                filter_types = [4]  # 游戏
+            elif type == "all":
+                filter_types = [2, 1, 4]  # 动画、书籍、游戏
+            else:
+                filter_types = [2]  # 动画
+                if type in ("manga", "both"):
+                    filter_types.append(1)  # 书籍
             offset = (page - 1) * limit_per_page
             async with httpx.AsyncClient(timeout=12.0, headers={"User-Agent": BANGUMI_USER_AGENT}) as client:
                 r = await client.post(
@@ -100,10 +110,10 @@ async def anime_search(
         except Exception as e:
             logging.getLogger("uvicorn.error").warning("Bangumi search failed: %s", e)
 
-    # MyAnimeList / Jikan（英文/日文搜索）
-    if source in ("mal", "both"):
+    # MyAnimeList / Jikan（仅动漫/漫画，无游戏）
+    if source in ("mal", "both") and type not in ("game",):
         async with httpx.AsyncClient(timeout=12.0) as client:
-            if type in ("anime", "both"):
+            if type in ("anime", "both", "all"):
                 try:
                     r = await client.get(f"{JIKAN_BASE}/anime", params={"q": q, "limit": 12, "page": page})
                     r.raise_for_status()
@@ -117,7 +127,7 @@ async def anime_search(
                             items_list.append({"type": "动漫", "title": a.get("title"), "title_japanese": a.get("title_japanese"), "url": url})
                 except Exception as e:
                     logging.getLogger("uvicorn.error").warning("Jikan anime search failed: %s", e)
-            if type in ("manga", "both"):
+            if type in ("manga", "both", "all"):
                 try:
                     r = await client.get(f"{JIKAN_BASE}/manga", params={"q": q, "limit": 12, "page": page})
                     r.raise_for_status()

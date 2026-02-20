@@ -35,9 +35,19 @@
                         <input type="hidden" id="category_id" name="category_id" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="finish_time">完成日期 <span class="required">*</span></label>
+                    <div class="form-group" id="finish-time-group">
+                        <label for="finish_time">完成日期 <span class="required" id="finish-time-required">*</span></label>
                         <input type="date" id="finish_time" name="finish_time" required placeholder="选择日期">
+                        <div class="form-group when-watch-option" id="when-watch-option" style="display: none; margin-top: 0.75rem;">
+                            <span class="when-watch-label">区分：</span>
+                            <label class="radio-inline"><input type="radio" name="when_watch" value="now" id="when_watch_now"> 正在看/现在在追</label>
+                            <label class="radio-inline"><input type="radio" name="when_watch" value="past" id="when_watch_past" checked> 以前看的</label>
+                        </div>
+                        <div class="form-group no-date-option" id="no-date-option" style="display: none; margin-top: 0.5rem;">
+                            <label class="checkbox-inline">
+                                <input type="checkbox" id="skip_finish_time" name="skip_finish_time" value="1"> 不填完成日期（仅全部年份中展示）
+                            </label>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -46,7 +56,7 @@
                     </div>
 
                     <div class="form-group cover-search-group" id="cover-search-group" style="display: none;">
-                        <label>动漫/漫画封面</label>
+                        <label id="cover-search-label">动漫/漫画/游戏封面</label>
                         <button type="button" id="cover-picker-open-btn" class="btn btn-secondary">搜索并选择封面</button>
                         <div id="cover-selected-preview" class="cover-selected-preview" style="display: none;">
                             <img id="cover-selected-img" src="" alt="">
@@ -113,6 +123,16 @@
                     });
                     categoryTabs.appendChild(tab);
                 });
+                const params = new URLSearchParams(window.location.search);
+                const wantCategory = params.get('category');
+                if (wantCategory) {
+                    const nameLower = wantCategory.toLowerCase();
+                    const tab = Array.from(categoryTabs.querySelectorAll('.category-tab')).find(t => {
+                        const n = (t.dataset.categoryName || '').toLowerCase();
+                        return n.indexOf(nameLower) !== -1 || (nameLower === '动漫' && (n.indexOf('动漫') !== -1 || n.indexOf('动画') !== -1 || n.indexOf('漫画') !== -1));
+                    });
+                    if (tab) tab.click();
+                }
             } catch (error) {
                 showMessage('加载分类失败: ' + error.message, 'error');
             }
@@ -140,16 +160,45 @@
 
         function updateCoverSearchVisibility() {
             const group = document.getElementById('cover-search-group');
+            const whenWatchOpt = document.getElementById('when-watch-option');
+            const noDateOpt = document.getElementById('no-date-option');
+            const finishInput = document.getElementById('finish_time');
+            const requiredSpan = document.getElementById('finish-time-required');
             const activeTab = document.querySelector('.category-tab.active');
             const categoryName = (activeTab && activeTab.dataset.categoryName) ? activeTab.dataset.categoryName.trim() : '';
+            const isGameCategory = categoryName.indexOf('游戏') !== -1;
             const isAnimeCategory = categoryName.indexOf('动漫') !== -1 || categoryName.indexOf('动画') !== -1 || categoryName.indexOf('漫画') !== -1;
-            group.style.display = isAnimeCategory ? 'block' : 'none';
+            const showWhenWatch = isAnimeCategory || isGameCategory;
+            group.style.display = showWhenWatch ? 'block' : 'none';
+            var coverLabel = document.getElementById('cover-search-label');
+            if (coverLabel) coverLabel.textContent = isGameCategory ? '游戏封面（Bangumi）' : '动漫/漫画封面';
+            if (whenWatchOpt) whenWatchOpt.style.display = showWhenWatch ? 'block' : 'none';
+            if (noDateOpt) noDateOpt.style.display = showWhenWatch ? 'none' : 'block';
+            const isNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
+            const skipChecked = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
+            if (finishInput && requiredSpan) {
+                const optional = (showWhenWatch && isNow) || (!showWhenWatch && skipChecked);
+                finishInput.required = !optional;
+                requiredSpan.style.display = optional ? 'none' : '';
+                finishInput.disabled = showWhenWatch && isNow;
+            }
         }
+        document.addEventListener('DOMContentLoaded', function() {
+            const skipCb = document.getElementById('skip_finish_time');
+            if (skipCb) skipCb.addEventListener('change', updateCoverSearchVisibility);
+            document.querySelectorAll('input[name="when_watch"]').forEach(function(radio) {
+                radio.addEventListener('change', updateCoverSearchVisibility);
+            });
+        });
 
-        // 封面选择：使用全局 CoverPicker 组件
+        // 封面选择：使用全局 CoverPicker 组件（动漫/漫画 type=both，游戏 type=game）
         function openAddCoverPicker() {
+            var activeTab = document.querySelector('.category-tab.active');
+            var categoryName = (activeTab && activeTab.dataset.categoryName) ? activeTab.dataset.categoryName : '';
+            var searchType = (categoryName.indexOf('游戏') !== -1) ? 'game' : 'both';
             CoverPicker.open({
                 initialSearch: document.getElementById('title').value.trim(),
+                searchType: searchType,
                 onSelect: function(url) {
                     document.getElementById('cover_image_url').value = url;
                     document.getElementById('cover-selected-img').src = url;
@@ -173,7 +222,13 @@
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
             formData.append('category_id', categoryId);
-            formData.append('finish_time', document.getElementById('finish_time').value);
+            const whenWatchNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
+            const skipFinishTime = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
+            if (whenWatchNow || skipFinishTime) {
+                formData.append('skip_finish_time', '1');
+            } else {
+                formData.append('finish_time', document.getElementById('finish_time').value);
+            }
             formData.append('is_completed', 'true');
             const notes = document.getElementById('notes').value;
             if (notes) formData.append('notes', notes);
@@ -186,7 +241,7 @@
             try {
                 await ItemsAPI.create(formData);
                 showMessage('添加成功！', 'success');
-                setTimeout(() => { window.location.href = '/'; }, 1000);
+                setTimeout(function() { window.location.href = '/'; }, 1000);
             } catch (error) {
                 showMessage('添加失败: ' + error.message, 'error');
             }
@@ -203,6 +258,9 @@
             document.getElementById('cover-selected-preview').style.display = 'none';
             document.getElementById('cover-selected-img').src = '';
             document.getElementById('cover-selected-title').textContent = '';
+            if (document.getElementById('skip_finish_time')) document.getElementById('skip_finish_time').checked = false;
+            if (document.getElementById('when_watch_past')) document.getElementById('when_watch_past').checked = true;
+            if (document.getElementById('when_watch_now')) document.getElementById('when_watch_now').checked = false;
             setTimeout(updateCoverSearchVisibility, 0);
         });
 
