@@ -65,6 +65,7 @@
     </main>
 
     <script src="/static/js/api.js?v=20260127"></script>
+    <script src="/static/js/cover-picker.js?v=20260127"></script>
     <script src="/static/js/app.js?v=20260127"></script>
     <script src="/static/js/components.js?v=20260127"></script>
     <script>
@@ -696,6 +697,7 @@
                                        style="display: none;"
                                        onchange="handleAddImages(${item.id}, this.closest('.item-detail-overlay'))">
                             </label>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openDetailCoverPicker(${item.id}, this.closest('.item-detail-overlay'))">搜索封面</button>
                         </div>
                         ${imagesHTML}
                     </div>
@@ -749,6 +751,43 @@
             document.addEventListener('keydown', escHandler);
         }
         
+        // 详情弹窗内「搜索封面」：用 CoverPicker 选图后调用接口并刷新列表
+        function openDetailCoverPicker(itemId, overlay) {
+            var titleEl = overlay.querySelector('.item-detail-title');
+            var initialSearch = titleEl ? titleEl.textContent.trim() : '';
+            CoverPicker.open({
+                initialSearch: initialSearch,
+                onSelect: function(coverUrl) {
+                    ItemsAPI.addCoverFromUrl(itemId, coverUrl).then(function(newImages) {
+                        // 接口返回该条目的完整图片列表（新封面已插在最前），直接替换
+                        overlay.dataset.currentImages = JSON.stringify(newImages);
+                        refreshDetailImages(overlay, itemId, newImages);
+                        if (typeof showMessage === 'function') showMessage('封面已添加', 'success');
+                    }).catch(function(err) {
+                        if (typeof showMessage === 'function') showMessage('添加失败: ' + err.message, 'error');
+                    });
+                }
+            });
+        }
+        window.openDetailCoverPicker = openDetailCoverPicker;
+
+        // 刷新详情弹窗内的图片网格（添加图片 / 搜索封面 后共用）
+        function refreshDetailImages(overlay, itemId, existingImages) {
+            var imagesContainer = overlay.querySelector('#item-detail-images-' + itemId);
+            if (!imagesContainer) return;
+            imagesContainer.innerHTML = existingImages.map(function(img, idx) {
+                return '<div class="item-detail-image-item" data-image-id="' + img.id + '">' +
+                    '<img src="' + img.image_url + '" alt="图片 ' + (idx + 1) + '">' +
+                    '<button class="item-image-delete" onclick="deleteImageFromDetail(' + img.id + ',' + itemId + ', this.closest(\'.item-detail-overlay\'))" title="删除图片">✕</button></div>';
+            }).join('');
+            imagesContainer.querySelectorAll('.item-detail-image-item').forEach(function(itemEl, idx) {
+                var img = itemEl.querySelector('img');
+                if (img) img.addEventListener('click', function(e) {
+                    if (!e.target.closest('.item-image-delete')) createImageViewer(existingImages, idx);
+                });
+            });
+        }
+
         // 处理添加图片
         async function handleAddImages(itemId, overlay) {
             const fileInput = document.getElementById(`add-images-${itemId}`);
@@ -766,41 +805,13 @@
                 
                 const newImages = await ItemsAPI.addImages(itemId, formData);
                 
-                // 更新overlay中的图片数据
-                const currentImages = JSON.parse(overlay.dataset.currentImages || '[]');
-                currentImages.push(...newImages);
+                var currentImages = JSON.parse(overlay.dataset.currentImages || '[]');
+                currentImages.push.apply(currentImages, newImages);
                 overlay.dataset.currentImages = JSON.stringify(currentImages);
                 
-                // 重新渲染图片网格
-                const imagesContainer = overlay.querySelector(`#item-detail-images-${itemId}`);
-                const existingImages = currentImages;
-                
-                imagesContainer.innerHTML = existingImages.map((img, idx) => `
-                    <div class="item-detail-image-item" data-image-id="${img.id}">
-                        <img src="${img.image_url}" alt="图片 ${idx + 1}">
-                        <button class="item-image-delete" onclick="deleteImageFromDetail(${img.id}, ${itemId}, this.closest('.item-detail-overlay'))" title="删除图片">✕</button>
-                    </div>
-                `).join('');
-                
-                // 重新绑定图片点击事件
-                const imageItems = imagesContainer.querySelectorAll('.item-detail-image-item');
-                imageItems.forEach((itemEl, idx) => {
-                    const img = itemEl.querySelector('img');
-                    if (img) {
-                        img.addEventListener('click', (e) => {
-                            if (!e.target.closest('.item-image-delete')) {
-                                createImageViewer(existingImages, idx);
-                            }
-                        });
-                    }
-                });
-                
+                refreshDetailImages(overlay, itemId, currentImages);
                 showMessage('图片添加成功', 'success');
-                
-                // 清空文件输入
                 fileInput.value = '';
-                
-                // 刷新列表（可选）
                 applyFilters();
             } catch (error) {
                 showMessage('添加图片失败: ' + error.message, 'error');

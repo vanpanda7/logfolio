@@ -36,7 +36,10 @@ class Item(Base):
     user_id = Column(String(64), nullable=False, index=True, default="default_user")
 
     category = relationship("Category", back_populates="items")
-    images = relationship("ItemImage", back_populates="item", cascade="all, delete-orphan")
+    images = relationship(
+        "ItemImage", back_populates="item", cascade="all, delete-orphan",
+        order_by="ItemImage.sort_order, ItemImage.id",
+    )
 
 
 class ItemImage(Base):
@@ -46,5 +49,6 @@ class ItemImage(Base):
     item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
     image_url = Column(String(500), nullable=False)
     upload_time = Column(DateTime, default=datetime.utcnow)
+    sort_order = Column(Integer, default=0, nullable=False)  # 越小越靠前，插入封面时置 0 并让其余 +1
 
     item = relationship("Item", back_populates="images")

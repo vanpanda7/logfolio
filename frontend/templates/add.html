@@ -45,14 +45,19 @@
                         <textarea id="notes" name="notes" rows="4" placeholder="都已经花时间了，干嘛不记录一下"></textarea>
                     </div>
 
-                    <!-- <div class="form-group">
-                        <label for="images">上传图片（可多选）</label>
-                        <input type="file" id="images" name="images" multiple accept="image/*">
-                        <div id="image-preview" class="image-preview"></div>
-                    </div> -->
-                    
+                    <div class="form-group cover-search-group" id="cover-search-group" style="display: none;">
+                        <label>动漫/漫画封面</label>
+                        <button type="button" id="cover-picker-open-btn" class="btn btn-secondary">搜索并选择封面</button>
+                        <div id="cover-selected-preview" class="cover-selected-preview" style="display: none;">
+                            <img id="cover-selected-img" src="" alt="">
+                            <span id="cover-selected-title"></span>
+                            <button type="button" id="cover-picker-change-btn" class="btn btn-link">更换</button>
+                        </div>
+                        <input type="hidden" id="cover_image_url" name="cover_image_url" value="">
+                    </div>
+
                     <div class="form-group">
-                        <label for="images">封面/图片</label>
+                        <label for="images">本地上传图片（可多选）</label>
                         <div class="file-upload-wrapper">
                             <input type="file" id="images" name="images" multiple accept="image/*" class="custom-file-input">
                             <div class="file-upload-hint">点击或拖拽上传图片</div>
@@ -71,6 +76,7 @@
     </main>
 
     <script src="/static/js/api.js?v=20260127"></script>
+    <script src="/static/js/cover-picker.js?v=20260127"></script>
     <script src="/static/js/app.js?v=20260127"></script>
     <script src="/static/js/components.js?v=20260127"></script>
     <script>
@@ -98,21 +104,13 @@
                     tab.className = 'category-tab';
                     tab.textContent = cat.name;
                     tab.dataset.categoryId = cat.id;
-                    
-                    // 点击 tab 选择分类
+                    tab.dataset.categoryName = cat.name || '';
                     tab.addEventListener('click', function() {
-                        // 移除所有 tab 的 active 状态
-                        document.querySelectorAll('.category-tab').forEach(t => {
-                            t.classList.remove('active');
-                        });
-                        
-                        // 添加当前 tab 的 active 状态
+                        document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
                         this.classList.add('active');
-                        
-                        // 设置隐藏输入框的值
                         categoryInput.value = cat.id;
+                        updateCoverSearchVisibility();
                     });
-                    
                     categoryTabs.appendChild(tab);
                 });
             } catch (error) {
@@ -124,15 +122,14 @@
         document.getElementById('images').addEventListener('change', function(e) {
             const preview = document.getElementById('image-preview');
             preview.innerHTML = '';
-            
             const files = e.target.files;
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 if (file.type.startsWith('image/')) {
                     const reader = new FileReader();
-                    reader.onload = function(e) {
+                    reader.onload = function(ev) {
                         const img = document.createElement('img');
-                        img.src = e.target.result;
+                        img.src = ev.target.result;
                         img.className = 'preview-image';
                         preview.appendChild(img);
                     };
@@ -141,42 +138,55 @@
             }
         });
 
+        function updateCoverSearchVisibility() {
+            const group = document.getElementById('cover-search-group');
+            const activeTab = document.querySelector('.category-tab.active');
+            const categoryName = (activeTab && activeTab.dataset.categoryName) ? activeTab.dataset.categoryName.trim() : '';
+            const isAnimeCategory = categoryName.indexOf('动漫') !== -1 || categoryName.indexOf('动画') !== -1 || categoryName.indexOf('漫画') !== -1;
+            group.style.display = isAnimeCategory ? 'block' : 'none';
+        }
+
+        // 封面选择：使用全局 CoverPicker 组件
+        function openAddCoverPicker() {
+            CoverPicker.open({
+                initialSearch: document.getElementById('title').value.trim(),
+                onSelect: function(url) {
+                    document.getElementById('cover_image_url').value = url;
+                    document.getElementById('cover-selected-img').src = url;
+                    document.getElementById('cover-selected-title').textContent = '已选封面';
+                    document.getElementById('cover-selected-preview').style.display = 'flex';
+                    if (typeof showMessage === 'function') showMessage('已选为封面', 'success');
+                }
+            });
+        }
+        document.getElementById('cover-picker-open-btn').addEventListener('click', openAddCoverPicker);
+        document.getElementById('cover-picker-change-btn').addEventListener('click', openAddCoverPicker);
+
         // 表单提交
         document.getElementById('add-item-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            // 验证分类是否已选择
             const categoryId = document.getElementById('category_id').value;
             if (!categoryId) {
                 showMessage('请选择分类', 'error');
                 return;
             }
-            
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
             formData.append('category_id', categoryId);
             formData.append('finish_time', document.getElementById('finish_time').value);
-            formData.append('is_completed', 'true');  // 标记为已完成记录
-
+            formData.append('is_completed', 'true');
             const notes = document.getElementById('notes').value;
-            if (notes) {
-                formData.append('notes', notes);
-            }
-            
-            // 添加图片文件
+            if (notes) formData.append('notes', notes);
+            const coverUrl = document.getElementById('cover_image_url').value.trim();
+            if (coverUrl) formData.append('cover_image_url', coverUrl);
             const imageInput = document.getElementById('images');
             for (let i = 0; i < imageInput.files.length; i++) {
                 formData.append('files', imageInput.files[i]);
             }
-            
             try {
                 await ItemsAPI.create(formData);
                 showMessage('添加成功！', 'success');
-                
-                // 延迟跳转，让用户看到成功消息
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 1000);
+                setTimeout(() => { window.location.href = '/'; }, 1000);
             } catch (error) {
                 showMessage('添加失败: ' + error.message, 'error');
             }
@@ -185,12 +195,15 @@
         // 设置默认日期为今天
         document.getElementById('finish_time').value = new Date().toISOString().slice(0, 10);
         
-        // 表单重置时清除分类选择
+        // 表单重置时清除分类与已选封面
         document.getElementById('reset-btn').addEventListener('click', function() {
-            document.querySelectorAll('.category-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
+            document.querySelectorAll('.category-tab').forEach(tab => tab.classList.remove('active'));
             document.getElementById('category_id').value = '';
+            document.getElementById('cover_image_url').value = '';
+            document.getElementById('cover-selected-preview').style.display = 'none';
+            document.getElementById('cover-selected-img').src = '';
+            document.getElementById('cover-selected-title').textContent = '';
+            setTimeout(updateCoverSearchVisibility, 0);
         });
 
         // 页面加载时初始化

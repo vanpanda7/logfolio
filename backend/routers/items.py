@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import extract
+from sqlalchemy import extract, update
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+from urllib.parse import urlparse
 import os
 import uuid
 from pathlib import Path
+import httpx
 
 from database import get_db
 from models import Item, ItemImage, Category
@@ -14,7 +16,9 @@ from config import UPLOAD_DIR
 from deps import get_user_id
 
 router = APIRouter(prefix="/api/items", tags=["items"])
-# UPLOAD_DIR 在 config.py 中已经确保创建
+
+# 允许的封面图来源（防止 SSRF，只拉取动漫/漫画 CDN）
+ALLOWED_COVER_HOSTS = ("cdn.myanimelist.net", "cdn.myanimelist.net.", "lain.bgm.tv", "lain.bgm.tv.")
 
 
 def _item_to_response(item):
@@ -35,11 +39,12 @@ def _item_to_response(item):
 @router.post("/")
 async def create_item(
     title: str = Form(...),
-    finish_time: Optional[str] = Form(None),  # 改为可选，用于已完成记录
-    due_time: Optional[str] = Form(None),      # 新增：预计完成时间，用于待办
+    finish_time: Optional[str] = Form(None),
+    due_time: Optional[str] = Form(None),
     category_id: int = Form(...),
     notes: Optional[str] = Form(None),
-    is_completed: Optional[bool] = Form(False),  # 新增：是否已完成
+    is_completed: Optional[bool] = Form(False),
+    cover_image_url: Optional[str] = Form(None),  # 动漫/漫画封面 URL（来自 Jikan/MAL），后端拉取并保存
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id),
@@ -79,7 +84,37 @@ async def create_item(
     db.add(item)
     db.commit()
     db.refresh(item)
-    
+
+    # 可选：从动漫/漫画封面 URL 拉取一张图作为首图（仅允许 MAL CDN），先于本地上传
+    if cover_image_url and cover_image_url.strip():
+        try:
+            parsed = urlparse(cover_image_url.strip())
+            if parsed.scheme not in ("https", "http") or parsed.netloc not in ALLOWED_COVER_HOSTS:
+                raise HTTPException(status_code=400, detail="封面链接仅允许来自 MyAnimeList 或 Bangumi CDN")
+            async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+                r = await client.get(cover_image_url.strip())
+                r.raise_for_status()
+                content_type = r.headers.get("content-type", "")
+                if "image/" not in content_type:
+                    raise HTTPException(status_code=400, detail="链接不是有效图片")
+                ext = ".jpg"
+                if "png" in content_type:
+                    ext = ".png"
+                elif "webp" in content_type:
+                    ext = ".webp"
+                fn = f"{uuid.uuid4()}{ext}"
+                path = os.path.join(UPLOAD_DIR, fn)
+                with open(path, "wb") as buf:
+                    buf.write(r.content)
+                cover_img = ItemImage(item_id=item.id, image_url=f"/api/uploads/{fn}")
+                db.add(cover_img)
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"拉取封面失败: {str(e)}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"保存封面失败: {str(e)}")
+
     for f in files:
         if f.filename:
             ext = Path(f.filename).suffix
@@ -89,6 +124,7 @@ async def create_item(
                 buf.write(await f.read())
             img = ItemImage(item_id=item.id, image_url=f"/api/uploads/{fn}")
             db.add(img)
+
     db.commit()
     db.refresh(item)
     return _item_to_response(item)
@@ -282,6 +318,59 @@ async def add_images(
     for i in out:
         db.refresh(i)
     return [{"id": i.id, "image_url": i.image_url, "upload_time": i.upload_time.isoformat()} for i in out]
+
+
+@router.post("/{item_id}/cover-from-url")
+async def add_cover_from_url(
+    item_id: int,
+    cover_image_url: str = Form(...),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    """为已有记录从 MAL 封面 URL 拉取并添加一张图片"""
+    item = db.query(Item).filter(Item.id == item_id, Item.user_id == user_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    if not cover_image_url or not cover_image_url.strip():
+        raise HTTPException(status_code=400, detail="请提供封面链接")
+    try:
+        parsed = urlparse(cover_image_url.strip())
+        if parsed.scheme not in ("https", "http") or parsed.netloc not in ALLOWED_COVER_HOSTS:
+            raise HTTPException(status_code=400, detail="封面链接仅允许来自 MyAnimeList 或 Bangumi CDN")
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            r = await client.get(cover_image_url.strip())
+            r.raise_for_status()
+            content_type = r.headers.get("content-type", "")
+            if "image/" not in content_type:
+                raise HTTPException(status_code=400, detail="链接不是有效图片")
+            ext = ".jpg"
+            if "png" in content_type:
+                ext = ".png"
+            elif "webp" in content_type:
+                ext = ".webp"
+            fn = f"{uuid.uuid4()}{ext}"
+            path = os.path.join(UPLOAD_DIR, fn)
+            with open(path, "wb") as buf:
+                buf.write(r.content)
+            img = ItemImage(item_id=item.id, image_url=f"/api/uploads/{fn}", sort_order=0)
+            db.add(img)
+            db.flush()
+            # 已有图片时，把新封面插到最前：其余 sort_order 统一 +1
+            db.execute(
+                update(ItemImage)
+                .where(ItemImage.item_id == item.id, ItemImage.id != img.id)
+                .values(sort_order=ItemImage.sort_order + 1)
+            )
+        db.commit()
+        db.refresh(img)
+        out = list(item.images)  # 已按 sort_order, id 排序
+        return [{"id": i.id, "image_url": i.image_url, "upload_time": i.upload_time.isoformat()} for i in out]
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"拉取封面失败: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存封面失败: {str(e)}")
 
 
 @router.delete("/images/{image_id}")

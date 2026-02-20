@@ -154,6 +154,22 @@ const ItemsAPI = {
         
         return await response.json();
     },
+
+    // 从封面 URL 添加一张图片（动漫/漫画封面，后端会拉取并保存）
+    addCoverFromUrl: async (itemId, coverImageUrl) => {
+        const url = `${API_BASE}/items/${itemId}/cover-from-url`;
+        const formData = new FormData();
+        formData.append('cover_image_url', coverImageUrl);
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    },
     
     // 删除图片
     deleteImage: (imageId) => apiRequest(`/items/images/${imageId}`, {
