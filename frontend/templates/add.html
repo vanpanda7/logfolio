@@ -40,8 +40,13 @@
                         <input type="date" id="finish_time" name="finish_time" required placeholder="选择日期">
                         <div class="form-group when-watch-option" id="when-watch-option" style="display: none; margin-top: 0.75rem;">
                             <span class="when-watch-label">区分：</span>
-                            <label class="radio-inline"><input type="radio" name="when_watch" value="now" id="when_watch_now"> 正在看/现在在追</label>
-                            <label class="radio-inline"><input type="radio" name="when_watch" value="past" id="when_watch_past" checked> 以前看的</label>
+                            <label class="radio-inline"><input type="radio" name="when_watch" value="now" id="when_watch_now" checked> 正在看/现在在追</label>
+                            <label class="radio-inline"><input type="radio" name="when_watch" value="past" id="when_watch_past"> 以前看的</label>
+                            <div class="form-group past-no-date-option" id="past-no-date-option" style="display: none; margin-top: 0.5rem; width: 100%;">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" id="skip_finish_time_past" name="skip_finish_time" value="1" checked> 不填完成日期（仅全部年份中展示）
+                                </label>
+                            </div>
                         </div>
                         <div class="form-group no-date-option" id="no-date-option" style="display: none; margin-top: 0.5rem;">
                             <label class="checkbox-inline">
@@ -162,6 +167,7 @@
             const group = document.getElementById('cover-search-group');
             const whenWatchOpt = document.getElementById('when-watch-option');
             const noDateOpt = document.getElementById('no-date-option');
+            const pastNoDateOpt = document.getElementById('past-no-date-option');
             const finishInput = document.getElementById('finish_time');
             const requiredSpan = document.getElementById('finish-time-required');
             const activeTab = document.querySelector('.category-tab.active');
@@ -175,9 +181,12 @@
             if (whenWatchOpt) whenWatchOpt.style.display = showWhenWatch ? 'block' : 'none';
             if (noDateOpt) noDateOpt.style.display = showWhenWatch ? 'none' : 'block';
             const isNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
+            const isPast = document.getElementById('when_watch_past') && document.getElementById('when_watch_past').checked;
             const skipChecked = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
+            const skipPastChecked = document.getElementById('skip_finish_time_past') && document.getElementById('skip_finish_time_past').checked;
+            if (pastNoDateOpt) pastNoDateOpt.style.display = (showWhenWatch && isPast) ? 'block' : 'none';
             if (finishInput && requiredSpan) {
-                const optional = (showWhenWatch && isNow) || (!showWhenWatch && skipChecked);
+                const optional = (showWhenWatch && isNow) || (showWhenWatch && isPast && skipPastChecked) || (!showWhenWatch && skipChecked);
                 finishInput.required = !optional;
                 requiredSpan.style.display = optional ? 'none' : '';
                 finishInput.disabled = showWhenWatch && isNow;
@@ -186,8 +195,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             const skipCb = document.getElementById('skip_finish_time');
             if (skipCb) skipCb.addEventListener('change', updateCoverSearchVisibility);
+            const skipPastCb = document.getElementById('skip_finish_time_past');
+            if (skipPastCb) skipPastCb.addEventListener('change', updateCoverSearchVisibility);
             document.querySelectorAll('input[name="when_watch"]').forEach(function(radio) {
-                radio.addEventListener('change', updateCoverSearchVisibility);
+                radio.addEventListener('change', function() {
+                    if (document.getElementById('when_watch_past') && document.getElementById('when_watch_past').checked) {
+                        var cb = document.getElementById('skip_finish_time_past');
+                        if (cb) cb.checked = true;
+                    }
+                    updateCoverSearchVisibility();
+                });
             });
         });
 
@@ -223,7 +240,8 @@
             formData.append('title', document.getElementById('title').value);
             formData.append('category_id', categoryId);
             const whenWatchNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
-            const skipFinishTime = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
+            const skipFinishTime = (document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked) ||
+                (document.getElementById('skip_finish_time_past') && document.getElementById('skip_finish_time_past').checked);
             if (whenWatchNow || skipFinishTime) {
                 formData.append('skip_finish_time', '1');
             } else {
@@ -259,8 +277,9 @@
             document.getElementById('cover-selected-img').src = '';
             document.getElementById('cover-selected-title').textContent = '';
             if (document.getElementById('skip_finish_time')) document.getElementById('skip_finish_time').checked = false;
-            if (document.getElementById('when_watch_past')) document.getElementById('when_watch_past').checked = true;
-            if (document.getElementById('when_watch_now')) document.getElementById('when_watch_now').checked = false;
+            if (document.getElementById('skip_finish_time_past')) document.getElementById('skip_finish_time_past').checked = false;
+            if (document.getElementById('when_watch_now')) document.getElementById('when_watch_now').checked = true;
+            if (document.getElementById('when_watch_past')) document.getElementById('when_watch_past').checked = false;
             setTimeout(updateCoverSearchVisibility, 0);
         });
 

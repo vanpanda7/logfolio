@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import extract, update
 from typing import List, Optional
@@ -239,34 +239,94 @@ def get_years(db: Session = Depends(get_db), user_id: str = Depends(get_user_id)
     return {"years": [int(r[0]) for r in rows if r[0] is not None]}
 
 
+def _escape_like(s: str) -> str:
+    """转义 LIKE 中的 % 和 _，避免被当作通配符"""
+    return (s or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/")
 def get_items(
     category_id: Optional[int] = None,
     year: Optional[int] = None,
-    is_completed: Optional[bool] = None,  # 新增：筛选已完成或待办
+    is_completed: Optional[bool] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id),
 ):
+    from sqlalchemy import or_
     q = db.query(Item).filter(Item.user_id == user_id)
     
-    # 默认只返回已完成的记录（保持向后兼容）
     if is_completed is None:
         is_completed = True
-    
     q = q.filter(Item.is_completed == is_completed)
     
     if category_id:
         q = q.filter(Item.category_id == category_id)
     if year:
-        # 对于已完成的记录，按 finish_time 筛选；对于待办，按 due_time 筛选
         if is_completed:
             q = q.filter(extract("year", Item.finish_time) == year)
         else:
             q = q.filter(extract("year", Item.due_time) == year)
     
-    # 按创建时间降序排序，新添加的记录在最上面
-    items = q.order_by(Item.created_at.desc()).all()
-    return [_item_to_response(i) for i in items]
+    if search and search.strip():
+        term = _escape_like(search.strip())
+        pattern = f"%{term}%"
+        q = q.filter(
+            or_(
+                Item.title.ilike(pattern, escape="\\"),
+                Item.notes.ilike(pattern, escape="\\"),
+            )
+        )
+    
+    q = q.order_by(Item.created_at.desc())
+    total = q.count()
+    if limit is not None:
+        q = q.offset(offset).limit(limit)
+    items = q.all()
+    result = [_item_to_response(i) for i in items]
+    if limit is not None:
+        return {"items": result, "total": total}
+    return result
+
+
+@router.get("/achievement-wall")
+def get_achievement_wall(
+    category_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    """成就墙：按分类返回已完成且带封面的记录。category_id 必传，为当前用户的分类 id（前端按用户分组展示）"""
+    if category_id is None:
+        return {"items": [], "total": 0}
+    q = (
+        db.query(Item)
+        .join(ItemImage)
+        .filter(Item.user_id == user_id, Item.is_completed == True, Item.category_id == category_id)
+        .order_by(Item.created_at.desc())
+    )
+    items = q.all()
+    seen_ids = set()
+    result = []
+    for item in items:
+        if item.id not in seen_ids and item.images:
+            seen_ids.add(item.id)
+            cat_name = item.category.name if item.category else ""
+            img_url = item.images[0].image_url if item.images else None
+            image_webp = None
+            if img_url and img_url.startswith("/api/uploads/"):
+                image_webp = "/api/serve-webp/" + img_url.replace("/api/uploads/", "").lstrip("/")
+            result.append({
+                "id": item.id,
+                "title": item.title,
+                "image": img_url,
+                "image_webp": image_webp,
+                "date": item.finish_time.strftime("%Y-%m-%d") if item.finish_time else None,
+                "category": cat_name,
+                "notes": item.notes,
+            })
+    return {"items": result, "total": len(result)}
 
 
 @router.get("/{item_id}")

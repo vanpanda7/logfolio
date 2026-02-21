@@ -97,10 +97,20 @@ const CategoriesAPI = {
 };
 
 /**
+ * 封面搜索（Bangumi/动漫/游戏），用于批量添加时拉取封面
+ */
+const CoverSearchAPI = {
+    search: (q, type = 'all', source = 'bangumi') => {
+        const params = new URLSearchParams({ q, type, page: 1, source });
+        return apiRequest(`/anime-search?${params.toString()}`);
+    },
+};
+
+/**
  * 记录相关API
  */
 const ItemsAPI = {
-    // 获取所有记录
+    // 获取记录。若 params 含 limit/offset 则返回 { items, total }；否则返回列表（兼容旧用法）
     getAll: (params = {}) => {
         const queryString = new URLSearchParams(params).toString();
         return apiRequest(`/items/${queryString ? '?' + queryString : ''}`);
@@ -178,6 +188,7 @@ const ItemsAPI = {
     
     // 获取年度墙数据
     getAnnualGallery: (year) => apiRequest(`/items/annual-gallery/${year}`),
+    getAchievementWall: (categoryId) => apiRequest(`/items/achievement-wall${categoryId != null ? '?category_id=' + encodeURIComponent(categoryId) : ''}`),
     
     // 获取待办列表
     getTodos: () => apiRequest('/items/todos'),
@@ -206,4 +217,5 @@ const ItemsAPI = {
 
 // 导出API对象
 window.CategoriesAPI = CategoriesAPI;
+window.CoverSearchAPI = CoverSearchAPI;
 window.ItemsAPI = ItemsAPI;

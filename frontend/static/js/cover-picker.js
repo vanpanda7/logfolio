@@ -1,10 +1,15 @@
 /**
  * 动漫/漫画封面选择器 - 可复用组件
  * 用法：CoverPicker.open({ initialSearch: '主题名', onSelect: function(coverUrl) {} })
+ * 快捷添加：CoverPicker.open({ mode: 'quickAdd', categories: [...], onAdd: function(item, categoryId) {} })
  */
 (function () {
     var overlay = null;
     var currentOnSelect = null;
+    var currentMode = 'select';
+    var currentOnAdd = null;
+    var currentCategories = [];
+    var currentCategoryId = '';
     var searchState = { q: '', page: 1, loading: false, loadingMore: false, hasNextPage: false, searchType: 'both' };
     var apiBase = function () { return window.API_BASE_URL || '/api'; };
 
@@ -22,6 +27,7 @@
             '    <button type="button" id="cover-picker-search-btn" class="btn btn-primary">搜索</button>' +
             '    <button type="button" id="cover-picker-close-btn" class="cover-picker-close-btn" aria-label="关闭">✕</button>' +
             '  </div>' +
+            '  <div id="cover-picker-extra" class="cover-picker-extra" style="display: none;"></div>' +
             '  <div class="cover-picker-content-area">' +
             '    <div id="cover-picker-loading" class="cover-picker-loading" style="display: none;">搜索中...</div>' +
             '    <div class="cover-picker-results-wrap">' +
@@ -53,17 +59,45 @@
         return ja || en || '';
     }
 
+    function getActiveCategoryId() {
+        if (currentMode !== 'quickAdd' || !overlay) return currentCategoryId;
+        var active = overlay.querySelector('#cover-picker-extra .cover-picker-quickadd-cat.active');
+        return active ? active.dataset.categoryId : currentCategoryId;
+    }
+
     function appendResultCard(container, item) {
         if (!item.url) return;
+        var title = displayTitle(item);
+        if (currentMode === 'quickAdd') {
+            var card = document.createElement('div');
+            card.className = 'cover-result-item cover-result-item-quickadd';
+            card.innerHTML = '<div class="cover-result-image-wrap">' +
+                '<img src="' + item.url + '" alt="" loading="lazy">' +
+                '</div>' +
+                '<div class="cover-result-footer">' +
+                '<span class="cover-result-title">' + (title || '') + '</span>' +
+                '<span class="cover-result-type">' + (item.type || '') + '</span>' +
+                '</div>' +
+                '<button type="button" class="btn btn-primary cover-result-add-btn">添加</button>';
+            var addBtn = card.querySelector('.cover-result-add-btn');
+            addBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var cid = getActiveCategoryId();
+                if (typeof currentOnAdd === 'function') currentOnAdd({ url: item.url, title: item.title, title_japanese: item.title_japanese, type: item.type }, cid, title);
+                close();
+            });
+            container.appendChild(card);
+            return;
+        }
         var card = document.createElement('div');
         card.className = 'cover-result-item';
         card.dataset.url = item.url;
-        card.dataset.title = displayTitle(item);
+        card.dataset.title = title;
         card.innerHTML = '<div class="cover-result-image-wrap">' +
             '<img src="' + item.url + '" alt="" loading="lazy">' +
             '</div>' +
             '<div class="cover-result-footer">' +
-            '<span class="cover-result-title">' + (displayTitle(item)) + '</span>' +
+            '<span class="cover-result-title">' + (title || '') + '</span>' +
             '<span class="cover-result-type">' + (item.type || '') + '</span>' +
             '</div>';
         card.addEventListener('click', function () {
@@ -76,18 +110,16 @@
 
     function close() {
         if (!overlay) return;
-        var scrollY = 0;
-        if (document.body.style.top) {
-            scrollY = Math.abs(parseInt(document.body.style.top, 10)) || 0;
-        }
-        overlay.classList.remove('open');
+        overlay.classList.remove('open', 'cover-picker-mode-quickadd');
         overlay.setAttribute('aria-hidden', 'true');
         currentOnSelect = null;
+        currentMode = 'select';
+        currentOnAdd = null;
+        currentCategories = [];
+        currentCategoryId = '';
+        var extra = overlay.querySelector('#cover-picker-extra');
+        if (extra) { extra.style.display = 'none'; extra.innerHTML = ''; }
         document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        window.scrollTo(0, scrollY);
     }
 
     async function doSearch() {
@@ -152,9 +184,40 @@
 
     function open(options) {
         options = options || {};
-        var searchType = (options.searchType === 'game') ? 'game' : 'both';
-        searchState.searchType = searchType;
         var el = getOverlay();
+        var extra = el.querySelector('#cover-picker-extra');
+        var sheet = el.querySelector('.cover-picker-sheet');
+
+        if (options.mode === 'quickAdd') {
+            currentMode = 'quickAdd';
+            currentOnAdd = options.onAdd || null;
+            currentCategories = options.categories || [];
+            var selectedId = (options.selectedCategoryId != null && options.selectedCategoryId !== '') ? String(options.selectedCategoryId) : '';
+            currentCategoryId = selectedId || (currentCategories[0] ? String(currentCategories[0].id) : '');
+            var searchType = 'both';
+            var targetCat = currentCategories.find(function (c) { return String(c.id) === currentCategoryId; });
+            if (targetCat && (targetCat.name || '').indexOf('游戏') !== -1) searchType = 'game';
+            else if (!targetCat && currentCategories[0]) {
+                if ((currentCategories[0].name || '').indexOf('游戏') !== -1) searchType = 'game';
+            }
+            searchState.searchType = searchType;
+            extra.style.display = 'none';
+            extra.innerHTML = '';
+            if (sheet) sheet.classList.add('cover-picker-mode-quickadd');
+            el.classList.add('cover-picker-mode-quickadd');
+        } else {
+            currentMode = 'select';
+            currentOnAdd = null;
+            currentCategories = [];
+            currentCategoryId = '';
+            if (extra) { extra.style.display = 'none'; extra.innerHTML = ''; }
+            if (sheet) sheet.classList.remove('cover-picker-mode-quickadd');
+            el.classList.remove('cover-picker-mode-quickadd');
+            var searchType = (options.searchType === 'game') ? 'game' : 'both';
+            searchState.searchType = searchType;
+        }
+
+        var searchType = searchState.searchType || 'both';
         var searchInput = el.querySelector('#cover-picker-search-input');
         searchInput.placeholder = searchType === 'game' ? '输入游戏名搜索封面（Bangumi）' : '输入动漫或漫画名搜索';
         var initialSearch = (options.initialSearch != null) ? String(options.initialSearch).trim() : '';
@@ -163,11 +226,10 @@
         el.querySelector('#cover-picker-results').innerHTML = '';
         el.classList.add('open');
         el.setAttribute('aria-hidden', 'false');
-        var scrollY = window.scrollY || window.pageYOffset;
         document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.top = '-' + scrollY + 'px';
-        document.body.style.width = '100%';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
         setTimeout(function () {
             searchInput.focus();
             if (initialSearch) doSearch();

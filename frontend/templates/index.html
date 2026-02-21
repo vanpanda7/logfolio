@@ -8,6 +8,7 @@
     <meta http-equiv="Expires" content="0">
     <title>Logfolio</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260127">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
         window.API_BASE_URL = '/api';
     </script>
@@ -15,409 +16,475 @@
 <body>
     <div class="header-container"></div>
 
-    <main class="main">
-        <div class="container">
-            <!-- 工具栏：搜索框（滚动时显示） -->
-            <div class="toolbar" id="toolbar-container">
-                <div class="search-wrapper" id="search-wrapper" style="display: none;">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" id="search-input" class="search-input" placeholder="搜索记录...">
-                    <button id="search-clear" class="search-clear" style="display: none;">✕</button>
+    <div id="app">
+        <main class="main">
+            <div class="container">
+                <!-- 顶部搜索框 -->
+                <div class="home-search-top">
+                    <div class="search-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" v-model.trim="searchTerm" class="search-input" placeholder="搜索记录（标题、备注）..." ref="searchInput">
+                        <button type="button" class="search-clear" v-show="searchTerm" @click="searchTerm = ''">✕</button>
+                    </div>
                 </div>
-            </div>
+                <!-- 工具栏：搜索框（滚动时显示） -->
+                <div class="toolbar" id="toolbar-container">
+                    <div class="search-wrapper" id="search-wrapper" style="display: none;">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" v-model.trim="searchTerm" class="search-input" placeholder="搜索记录..." ref="searchInput">
+                        <button type="button" class="search-clear" v-show="searchTerm" @click="searchTerm = ''">✕</button>
+                    </div>
+                </div>
 
-            <!-- 统计 + 年份 + 分类筛选（保留新设计） -->
-            <div id="statistics" class="home-stats">
-                <div class="home-stats-row">
-                    <div class="home-stat-total">
-                        <p class="home-stat-label">总记录数</p>
-                        <div class="home-stat-value-wrap">
-                            <span id="stat-total" class="home-stat-value">0</span>
-                            <span class="home-stat-unit">条目</span>
+                <!-- 统计 + 年份 + 分类筛选 -->
+                <div class="home-stats">
+                    <div class="home-stats-row">
+                        <div class="home-stat-total">
+                            <p class="home-stat-label">总记录数</p>
+                            <div class="home-stat-value-wrap">
+                                <span class="home-stat-value">{{ displayTotal }}</span>
+                                <span class="home-stat-unit">条目</span>
+                            </div>
+                        </div>
+                        <div class="home-year-wrap">
+                            <button type="button" class="home-year-btn" @click.stop="yearDropdownOpen = !yearDropdownOpen">
+                                <span>{{ yearLabel }}</span>
+                                <span class="home-year-chevron">▼</span>
+                            </button>
+                            <div class="home-year-dropdown" v-show="yearDropdownOpen" @click.stop>
+                                <button type="button" v-for="y in yearOptions" :key="y" :class="['stat-year-item','home-year-option', { active: selectedYear === y }]" :data-year="y" @click="selectYear(y); yearDropdownOpen = false">{{ y === '' ? '全部年份' : y }}</button>
+                            </div>
+                            <button type="button" v-show="!selectedYear" class="home-quick-add-btn" title="搜索后直接添加为历史记录" @click="openQuickAdd">+ 快捷添加</button>
+                            <button type="button" v-show="!selectedYear" class="home-quick-add-btn home-batch-add-btn" title="每行一个标题，批量创建记录" @click="openBatchAdd">批量添加</button>
                         </div>
                     </div>
-                    <div class="home-year-wrap">
-                        <button type="button" id="year-dropdown-btn" class="home-year-btn">
-                            <span id="year-dropdown-label">2026</span>
-                            <span class="home-year-chevron">▼</span>
+                    <div class="home-chips">
+                        <button type="button" v-for="chip in categoryChips" :key="chip.id" :class="['stat-category-item','home-chip', { active: selectedCategoryId === chip.id }]" :data-category-id="chip.id" @click="selectCategory(chip.id)">
+                            <span>{{ chip.name }}</span>
+                            <span class="home-chip-count">{{ chip.count }}</span>
                         </button>
-                        <div id="year-dropdown" class="home-year-dropdown" style="display: none;">
-                            <!-- 年份选项由 JS 填充 -->
-                        </div>
                     </div>
                 </div>
-                <div id="filter-chips" class="home-chips">
-                    <!-- 由 JS 填充 -->
+
+                <transition name="loading-fade">
+                    <div v-show="loading || (searchTerm && searchLoading)" class="loading loading-with-animation">加载中...</div>
+                </transition>
+                <div v-show="!loading && !(searchTerm && searchLoading) && filteredList.length === 0" class="empty-state">
+                    <div class="empty-icon">🍂</div>
+                    <p v-if="searchTerm">未找到匹配「{{ searchTerm }}」的记录</p>
+                    <p v-else>这里还什么都没有</p>
+                    <a v-if="!searchTerm" href="/add" class="btn btn-primary">去记录一笔</a>
+                </div>
+                <transition name="grid-fade" mode="out-in">
+                    <div v-show="!loading && !(searchTerm && searchLoading) && filteredList.length > 0" class="items-grid" key="grid">
+                        <div v-for="item in filteredList" :key="item.id" class="item-card" @click="onCardClick($event, item)" @contextmenu.prevent="confirmDeleteItem(item)">
+                            <div class="item-card-image">
+                                <div class="item-badge">{{ item.category_name }}</div>
+                                <div class="item-card-image-slot">
+                                    <img :src="itemCover(item)" loading="lazy" :alt="item.title" @error="($event.target).src='/static/images/placeholder.svg'">
+                                </div>
+                                <div class="item-overlay">
+                                    <h3 class="item-title">{{ item.title }}</h3>
+                                    <div class="item-meta">
+                                        <span v-if="item.finish_time">{{ formatDate(item.finish_time) }}</span>
+                                        <span v-if="item.images && item.images.length > 1">📷 {{ item.images.length }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="item-delete-btn" title="删除" @click.stop="confirmDeleteItem(item)">🗑️</button>
+                        </div>
+                    </div>
+                </transition>
+                <div v-show="!loading && filteredList.length > 0 && hasMore" class="load-more-wrap">
+                    <div class="load-more-inner" :class="{ pulling: !loadingMore, loading: loadingMore }">
+                        <template v-if="loadingMore">
+                            <span class="load-more-spinner"></span>
+                            <span class="load-more-text">加载中...</span>
+                        </template>
+                        <template v-else>
+                            <span class="load-more-arrow">↑</span>
+                            <span class="load-more-hint">上拉加载更多</span>
+                        </template>
+                    </div>
                 </div>
             </div>
-
-            <!-- 加载提示 -->
-            <div id="loading" class="loading" style="display: none;">加载中...</div>
-            <!-- 空状态 -->
-            <div id="empty-state" class="empty-state" style="display: none;">
-                <div class="empty-icon">🍂</div>
-                <p>这里还什么都没有</p>
-                <a href="/add" class="btn btn-primary">去记录一笔</a>
+        </main>
+        <!-- 批量添加弹窗 -->
+        <div v-show="batchAddOpen" class="batch-add-overlay" @click.self="closeBatchAdd">
+            <div class="batch-add-dialog">
+                <div class="batch-add-header">
+                    <h3>批量添加</h3>
+                    <button type="button" class="batch-add-close" @click="closeBatchAdd">✕</button>
+                </div>
+                <p class="batch-add-hint">每行一个标题，将批量创建为已完成记录（不填完成日期）</p>
+                <textarea v-model="batchAddText" class="batch-add-textarea" placeholder="黑暗之魂1&#10;黑暗之魂2&#10;艾尔登法环&#10;只狼" rows="8"></textarea>
+                <div class="batch-add-category">
+                    <label>归属分类</label>
+                    <select v-model="batchAddCategoryId" class="batch-add-select">
+                        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                </div>
+                <p v-if="batchAdding" class="batch-add-progress">已添加 {{ batchAddDone }} / {{ batchAddTotal }}</p>
+                <div class="batch-add-actions">
+                    <button type="button" class="btn btn-primary" :disabled="batchAdding || !batchAddText.trim() || !batchAddCategoryId" @click="submitBatchAdd">批量创建</button>
+                    <button type="button" class="btn btn-secondary" :disabled="batchAdding" @click="closeBatchAdd">取消</button>
+                </div>
             </div>
-            <!-- 海报墙容器 -->
-            <div id="items-grid" class="items-grid"></div>
         </div>
-    </main>
+    </div>
 
     <script src="/static/js/api.js?v=20260127"></script>
     <script src="/static/js/cover-picker.js?v=20260127"></script>
     <script src="/static/js/app.js?v=20260127"></script>
     <script src="/static/js/components.js?v=20260127"></script>
     <script>
-        // 全局变量
-        let allItems = [];
-        let filteredItems = [];
-        let categories = [];
-        let currentFilters = {};
+        const { createApp } = Vue;
 
-        // 初始化
-        async function init() {
-            console.log('页面初始化开始...');
-            try {
-                if (typeof window.renderHeader === 'function') {
-                    window.renderHeader('index');
-                } else {
-                    console.error('renderHeader 函数未找到！');
+        const indexApp = createApp({
+            data() {
+                return {
+                    loading: false,
+                    loadingMore: false,
+                    items: [],
+                    totalCount: 0,
+                    hasMore: false,
+                    categories: [],
+                    selectedYear: String(new Date().getFullYear()),
+                    selectedCategoryId: '',
+                    searchTerm: '',
+                    searchResults: [],
+                    searchLoading: false,
+                    searchDebounceTimer: null,
+                    yearDropdownOpen: false,
+                    availableYears: [],
+                    byCategoryCounts: {},
+                    PAGE_SIZE: 20,
+                    PULL_TRIGGER_PX: 72,
+                    batchAddOpen: false,
+                    batchAddText: '',
+                    batchAddCategoryId: '',
+                    batchAdding: false,
+                    batchAddDone: 0,
+                    batchAddTotal: 0,
+                };
+            },
+            computed: {
+                yearLabel() {
+                    return this.selectedYear === '' ? '全部年份' : this.selectedYear;
+                },
+                yearOptions() {
+                    const list = [''].concat(this.availableYears);
+                    return list;
+                },
+                categoryChips() {
+                    const list = [{ id: '', name: '全部', count: this.statTotal }];
+                    (this.categories || []).forEach(cat => {
+                        list.push({
+                            id: String(cat.id),
+                            name: cat.name || '',
+                            count: this.byCategoryCounts[cat.name] ?? 0
+                        });
+                    });
+                    return list;
+                },
+                statTotal() {
+                    return this.totalCount;
+                },
+                displayTotal() {
+                    if (this.searchTerm.trim()) return this.filteredList.length;
+                    return this.statTotal;
+                },
+                filteredList() {
+                    if (!this.searchTerm.trim()) return this.items;
+                    return this.searchResults;
                 }
-                setupSearch();
-                await loadCategories();
-                setupFilters();
-                const currentYear = new Date().getFullYear();
-                await loadItems({ year: currentYear }, '', currentYear.toString());
-                setupYearDropdownToggle();
-                // 从动漫页点击卡片跳转：/?item_id=xxx 时自动打开该条详情
-                var urlParams = new URLSearchParams(window.location.search);
-                var openItemId = urlParams.get('item_id');
+            },
+            methods: {
+                formatDate(d) {
+                    return typeof window.formatDate === 'function' ? window.formatDate(d) : (d || '—');
+                },
+                itemCover(item) {
+                    const url = (item.images && item.images.length > 0) ? item.images[0].image_url : '';
+                    if (!url) return '/static/images/placeholder.svg';
+                    if (url.startsWith('/api/uploads/')) return '/api/serve-webp/' + url.replace(/^\/api\/uploads\//, '');
+                    return url;
+                },
+                buildParams() {
+                    const p = {};
+                    if (this.selectedYear) p.year = parseInt(this.selectedYear, 10);
+                    if (this.selectedCategoryId) p.category_id = parseInt(this.selectedCategoryId, 10);
+                    return p;
+                },
+                async loadCategories() {
+                    try {
+                        const list = await CategoriesAPI.getAll();
+                        this.categories = list || [];
+                        const temp = document.getElementById('category-filter-tabs');
+                        if (!temp && this.categories.length) {
+                            const div = document.createElement('div');
+                            div.id = 'category-filter-tabs';
+                            div.className = 'category-filter-tabs';
+                            div.style.display = 'none';
+                            document.body.appendChild(div);
+                        }
+                    } catch (e) {
+                        if (typeof showMessage === 'function') showMessage('加载分类失败: ' + (e.message || ''), 'error');
+                    }
+                },
+                async loadItems() {
+                    this.loading = true;
+                    try {
+                        const params = { ...this.buildParams(), limit: this.PAGE_SIZE, offset: 0 };
+                        const data = await ItemsAPI.getAll(params);
+                        const list = Array.isArray(data) ? data : (data.items || []);
+                        const total = Array.isArray(data) ? data.length : (data.total ?? 0);
+                        this.items = list;
+                        this.totalCount = total;
+                        this.hasMore = this.items.length < this.totalCount;
+                        this.byCategoryCounts = {};
+                        this.items.forEach(item => {
+                            const name = (item.category && item.category.name) || item.category_name || '';
+                            if (name) this.byCategoryCounts[name] = (this.byCategoryCounts[name] || 0) + 1;
+                        });
+                        let years = [];
+                        try {
+                            const res = await ItemsAPI.getAvailableYears();
+                            years = (res.years || []).map(String);
+                        } catch (e) {}
+                        if (years.length === 0) years.push(String(new Date().getFullYear()));
+                        this.availableYears = years;
+                    } catch (error) {
+                        if (typeof showMessage === 'function') showMessage('加载记录失败: ' + (error.message || ''), 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async loadMore() {
+                    if (this.loadingMore || !this.hasMore || this.searchTerm.trim()) return;
+                    this.loadingMore = true;
+                    try {
+                        const params = { ...this.buildParams(), limit: this.PAGE_SIZE, offset: this.items.length };
+                        const data = await ItemsAPI.getAll(params);
+                        const list = Array.isArray(data) ? data : (data.items || []);
+                        this.items = this.items.concat(list);
+                        this.hasMore = this.items.length < this.totalCount;
+                        list.forEach(item => {
+                            const name = (item.category && item.category.name) || item.category_name || '';
+                            if (name) this.byCategoryCounts[name] = (this.byCategoryCounts[name] || 0) + 1;
+                        });
+                    } catch (error) {
+                        if (typeof showMessage === 'function') showMessage('加载更多失败: ' + (error.message || ''), 'error');
+                    } finally {
+                        this.loadingMore = false;
+                    }
+                },
+                onScroll() {
+                    if (this._scrollTimer) return;
+                    this._scrollTimer = setTimeout(() => {
+                        this._scrollTimer = null;
+                        if (!this.hasMore || this.loadingMore || this.searchTerm.trim()) return;
+                        const el = document.scrollingElement || document.documentElement;
+                        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                        if (distanceToBottom <= this.PULL_TRIGGER_PX) this.loadMore();
+                    }, 120);
+                },
+                async loadSearchResults() {
+                    const term = this.searchTerm.trim();
+                    if (!term) {
+                        this.searchResults = [];
+                        return;
+                    }
+                    this.searchLoading = true;
+                    try {
+                        const params = this.buildParams();
+                        params.search = term;
+                        const data = await ItemsAPI.getAll(params);
+                        this.searchResults = Array.isArray(data) ? data : (data.items || []);
+                    } catch (e) {
+                        this.searchResults = [];
+                        if (typeof showMessage === 'function') showMessage('搜索失败: ' + (e.message || ''), 'error');
+                    } finally {
+                        this.searchLoading = false;
+                    }
+                },
+                refreshList() {
+                    return this.loadItems();
+                },
+                selectYear(y) {
+                    this.selectedYear = y === '' ? '' : String(y);
+                    this.searchTerm = '';
+                    this.loadItems();
+                },
+                selectCategory(id) {
+                    this.selectedCategoryId = id || '';
+                    this.searchTerm = '';
+                    this.loadItems();
+                },
+                openQuickAdd() {
+                    if (!this.categories.length) {
+                        if (typeof showMessage === 'function') showMessage('请先等待分类加载', 'error');
+                        return;
+                    }
+                    const app = this;
+                    CoverPicker.open({
+                        mode: 'quickAdd',
+                        categories: this.categories,
+                        selectedCategoryId: this.selectedCategoryId,
+                        onAdd(item, categoryId, title) {
+                            const displayTitle = title || (item.title_japanese && item.title_japanese.trim()) || (item.title && item.title.trim()) || '未命名';
+                            const coverUrl = (item && item.url) ? item.url.trim() : '';
+                            const formData = new FormData();
+                            formData.append('title', displayTitle);
+                            formData.append('category_id', categoryId);
+                            formData.append('is_completed', 'true');
+                            formData.append('skip_finish_time', '1');
+                            if (coverUrl) formData.append('cover_image_url', coverUrl);
+                            ItemsAPI.create(formData).then(() => {
+                                if (typeof showMessage === 'function') showMessage('已添加', 'success');
+                                app.refreshList();
+                            }).catch(err => {
+                                if (typeof showMessage === 'function') showMessage('添加失败: ' + (err.message || '网络错误'), 'error');
+                            });
+                        }
+                    });
+                },
+                openBatchAdd() {
+                    if (!this.categories.length) {
+                        if (typeof showMessage === 'function') showMessage('请先等待分类加载', 'error');
+                        return;
+                    }
+                    this.batchAddText = '';
+                    this.batchAddCategoryId = this.selectedCategoryId ? String(this.selectedCategoryId) : (this.categories[0] ? String(this.categories[0].id) : '');
+                    this.batchAddOpen = true;
+                    this.batchAdding = false;
+                },
+                closeBatchAdd() {
+                    if (this.batchAdding) return;
+                    this.batchAddOpen = false;
+                },
+                async submitBatchAdd() {
+                    const lines = this.batchAddText.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+                    if (lines.length === 0) {
+                        if (typeof showMessage === 'function') showMessage('请至少输入一行标题', 'error');
+                        return;
+                    }
+                    const categoryId = this.batchAddCategoryId ? parseInt(this.batchAddCategoryId, 10) : (this.categories[0] && this.categories[0].id);
+                    if (!categoryId) {
+                        if (typeof showMessage === 'function') showMessage('请选择分类', 'error');
+                        return;
+                    }
+                    const cat = this.categories.find(c => c.id === categoryId);
+                    const searchType = (cat && cat.name && cat.name.indexOf('游戏') !== -1) ? 'game' : 'all';
+                    this.batchAdding = true;
+                    this.batchAddTotal = lines.length;
+                    this.batchAddDone = 0;
+                    let ok = 0;
+                    for (let i = 0; i < lines.length; i++) {
+                        try {
+                            let coverUrl = '';
+                            try {
+                                const res = await CoverSearchAPI.search(lines[i], searchType, 'bangumi');
+                                const list = res && res.data ? res.data : [];
+                                if (list.length > 0 && list[0].url) coverUrl = list[0].url.trim();
+                            } catch (_) {}
+                            const formData = new FormData();
+                            formData.append('title', lines[i]);
+                            formData.append('category_id', categoryId);
+                            formData.append('is_completed', 'true');
+                            formData.append('skip_finish_time', '1');
+                            if (coverUrl) formData.append('cover_image_url', coverUrl);
+                            await ItemsAPI.create(formData);
+                            ok++;
+                        } catch (e) {
+                            if (typeof showMessage === 'function') showMessage('第 ' + (i + 1) + ' 条添加失败: ' + (e.message || ''), 'error');
+                        }
+                        this.batchAddDone = i + 1;
+                        if (i < lines.length - 1) await new Promise(r => setTimeout(r, 250));
+                    }
+                    this.batchAdding = false;
+                    if (typeof showMessage === 'function') showMessage('已添加 ' + ok + ' 条', ok > 0 ? 'success' : 'info');
+                    this.batchAddOpen = false;
+                    this.refreshList();
+                },
+                onCardClick(e, item) {
+                    if (e.target.closest('.item-delete-btn')) return;
+                    showItemDetail(item);
+                },
+                confirmDeleteItem(item) {
+                    showConfirmDialog('确定要删除这条记录吗？', () => { deleteItem(item.id); });
+                }
+            },
+            watch: {
+                searchTerm(newVal) {
+                    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+                    if (!(newVal && newVal.trim())) {
+                        this.searchResults = [];
+                        return;
+                    }
+                    this.searchDebounceTimer = setTimeout(() => {
+                        this.searchDebounceTimer = null;
+                        this.loadSearchResults();
+                    }, 300);
+                }
+            },
+            mounted() {
+                document.body.style.overflow = '';
+                document.addEventListener('click', () => { this.yearDropdownOpen = false; });
+                window.addEventListener('scroll', this.onScroll, { passive: true });
+            },
+            beforeUnmount() {
+                window.removeEventListener('scroll', this.onScroll);
+            }
+        });
+
+        const root = indexApp.mount('#app');
+        window.indexApp = root;
+
+        async function init() {
+            try {
+                if (typeof window.renderHeader === 'function') window.renderHeader('index');
+                await root.loadCategories();
+                await root.loadItems();
+                setupScrollSearch();
+                const urlParams = new URLSearchParams(window.location.search);
+                const openItemId = urlParams.get('item_id');
                 if (openItemId) {
                     try {
-                        var item = await ItemsAPI.getById(openItemId);
+                        const item = await ItemsAPI.getById(openItemId);
                         if (item) showItemDetail(item);
                     } catch (e) {
                         if (typeof showMessage === 'function') showMessage('未找到该记录', 'error');
                     }
                 }
-                console.log('页面初始化完成');
             } catch (error) {
                 console.error('页面初始化失败:', error);
-                console.error('错误堆栈:', error.stack);
-                
-                // 显示更详细的错误信息
-                let errorMessage = '页面加载失败: ' + error.message;
-                if (error.status === 401) {
-                    errorMessage = '认证失败，请刷新页面并重新登录';
-                } else if (error.message.includes('网络')) {
-                    errorMessage = '网络连接失败，请检查网络或稍后重试';
+                let msg = '页面加载失败: ' + (error.message || '');
+                if (error.status === 401) msg = '认证失败，请刷新页面并重新登录';
+                if (typeof showMessage === 'function') showMessage(msg, 'error');
+            }
+        }
+
+        function setupScrollSearch() {
+            const searchWrapper = document.getElementById('search-wrapper');
+            if (!searchWrapper) return;
+            let lastScrollTop = 0;
+            let scrollTimeout;
+            window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                clearTimeout(scrollTimeout);
+                if (scrollTop > 100 && scrollTop > lastScrollTop) {
+                    searchWrapper.style.display = 'block';
+                    searchWrapper.style.opacity = '0';
+                    setTimeout(() => {
+                        searchWrapper.style.transition = 'opacity 0.3s';
+                        searchWrapper.style.opacity = '1';
+                    }, 10);
                 }
-                
-                showMessage(errorMessage, 'error');
-                
-                // 在控制台显示更多调试信息
-                console.error('调试信息:', {
-                    API_BASE_URL: window.API_BASE_URL,
-                    currentURL: window.location.href,
-                    error: error
-                });
-            }
-            setTimeout(() => {
-                const y = new Date().getFullYear();
-                const yearEl = document.querySelector('.stat-year-item[data-year="' + y + '"]');
-                if (yearEl) yearEl.classList.add('active');
-                const allCat = document.querySelector('.stat-category-item[data-category-id=""]');
-                if (allCat) allCat.classList.add('active');
-            }, 100);
-        }
-
-        // 设置搜索功能
-        function setupSearch() {
-            const searchInput = document.getElementById('search-input');
-            const searchClear = document.getElementById('search-clear');
-            if (searchInput) {
-                searchInput.addEventListener('input', function(e) {
-                    const value = e.target.value.trim();
-                    if (searchClear) searchClear.style.display = value ? 'block' : 'none';
-                    if (typeof window.handleSearch === 'function') window.handleSearch(value);
-                });
-            }
-            if (searchClear && searchInput) {
-                searchClear.addEventListener('click', function() {
-                    searchInput.value = '';
-                    searchClear.style.display = 'none';
-                    if (typeof window.handleSearch === 'function') window.handleSearch('');
-                });
-            }
-        }
-
-        // 加载分类列表并渲染为 tab
-        async function loadCategories() {
-            try {
-                console.log('加载分类列表...');
-                console.log('调用 CategoriesAPI.getAll()...');
-                categories = await CategoriesAPI.getAll();
-                console.log('分类列表加载成功:', categories.length, '个分类');
-                
-                // 创建临时的分类tabs容器（用于获取HTML）
-                const tempContainer = document.createElement('div');
-                tempContainer.id = 'category-filter-tabs';
-                tempContainer.className = 'category-filter-tabs';
-                
-                // 添加"全部"按钮
-                const allTab = document.createElement('button');
-                allTab.type = 'button';
-                allTab.className = 'category-filter-tab active';
-                allTab.textContent = '全部';
-                allTab.dataset.categoryId = '';
-                tempContainer.appendChild(allTab);
-                
-                // 添加其他分类 tab
-                categories.forEach(cat => {
-                    const tab = document.createElement('button');
-                    tab.type = 'button';
-                    tab.className = 'category-filter-tab';
-                    tab.textContent = cat.name;
-                    tab.dataset.categoryId = cat.id;
-                    tempContainer.appendChild(tab);
-                });
-                
-                // 将临时容器添加到页面（隐藏）
-                tempContainer.style.display = 'none';
-                document.body.appendChild(tempContainer);
-                
-                // 绑定点击事件（使用事件委托）
-                tempContainer.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('category-filter-tab')) {
-                        // 移除所有 tab 的 active 状态
-                        document.querySelectorAll('.category-filter-tab').forEach(t => {
-                            t.classList.remove('active');
-                        });
-                        
-                        // 添加当前 tab 的 active 状态
-                        e.target.classList.add('active');
-                        
-                        // 应用筛选
-                        applyFilters();
-                    }
-                });
-            } catch (error) {
-                showMessage('加载分类失败: ' + error.message, 'error');
-            }
-        }
-
-        // 首页统计 + 年份下拉 + 筛选胶囊（新设计）
-        async function renderHomeStats(selectedYear, selectedCategoryId) {
-            const statTotalEl = document.getElementById('stat-total');
-            const yearLabelEl = document.getElementById('year-dropdown-label');
-            const yearDropdownEl = document.getElementById('year-dropdown');
-            const chipsContainer = document.getElementById('filter-chips');
-            if (!statTotalEl || !chipsContainer) return;
-            try {
-                const stats = await ItemsAPI.getStatistics(selectedYear || new Date().getFullYear());
-                let availableYears = [];
-                try {
-                    const res = await ItemsAPI.getAvailableYears();
-                    availableYears = (res.years || []).map(String);
-                } catch (e) {}
-                if (availableYears.length === 0) availableYears.push(String(new Date().getFullYear()));
-                statTotalEl.textContent = stats.total ?? 0;
-                yearLabelEl.textContent = selectedYear || '全部年份';
-                // 年份下拉
-                yearDropdownEl.innerHTML = '';
-                yearDropdownEl.style.display = 'none';
-                const allYearBtn = document.createElement('button');
-                allYearBtn.type = 'button';
-                allYearBtn.className = 'stat-year-item home-year-option' + (!selectedYear ? ' active' : '');
-                allYearBtn.dataset.year = '';
-                allYearBtn.textContent = '全部年份';
-                allYearBtn.addEventListener('click', function() { filterByYear(''); yearDropdownEl.style.display = 'none'; });
-                yearDropdownEl.appendChild(allYearBtn);
-                availableYears.forEach(y => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'stat-year-item home-year-option' + (selectedYear === y ? ' active' : '');
-                    btn.dataset.year = y;
-                    btn.textContent = y;
-                    btn.addEventListener('click', function() { filterByYear(y); yearDropdownEl.style.display = 'none'; });
-                    yearDropdownEl.appendChild(btn);
-                });
-                // 筛选胶囊：全部 + 各分类
-                const byCat = stats.by_category || {};
-                const totalCount = stats.total || 0;
-                chipsContainer.innerHTML = '';
-                const allChip = document.createElement('button');
-                allChip.type = 'button';
-                allChip.className = 'stat-category-item home-chip' + (!selectedCategoryId ? ' active' : '');
-                allChip.dataset.categoryId = '';
-                allChip.innerHTML = '<span>全部</span><span class="home-chip-count">' + totalCount + '</span>';
-                allChip.addEventListener('click', function() { filterByCategory(''); });
-                chipsContainer.appendChild(allChip);
-                Object.entries(byCat).forEach(([name, count]) => {
-                    const cat = categories.find(c => c.name === name);
-                    const cid = cat ? String(cat.id) : '';
-                    const isActive = selectedCategoryId && cid === String(selectedCategoryId);
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'stat-category-item home-chip' + (isActive ? ' active' : '');
-                    btn.dataset.categoryId = cid;
-                    btn.innerHTML = '<span>' + name + '</span><span class="home-chip-count">' + count + '</span>';
-                    btn.addEventListener('click', function() { filterByCategory(cid); });
-                    chipsContainer.appendChild(btn);
-                });
-            } catch (err) {
-                console.error('renderHomeStats:', err);
-            }
-        }
-
-        function setupYearDropdownToggle() {
-            const btn = document.getElementById('year-dropdown-btn');
-            const panel = document.getElementById('year-dropdown');
-            if (!btn || !panel) return;
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-            });
-            document.addEventListener('click', function() { panel.style.display = 'none'; });
-        }
-
-        // 加载记录列表
-        async function loadItems(params = {}, categoryId = '', year = '') {
-            console.log('loadItems 调用:', { params, categoryId, year });
-            const loading = document.getElementById('loading');
-            const emptyState = document.getElementById('empty-state');
-            const grid = document.getElementById('items-grid');
-            
-            loading.style.display = 'block';
-            grid.innerHTML = '';
-            
-            try {
-                console.log('加载记录列表...', params);
-                allItems = await ItemsAPI.getAll(params);
-                console.log('记录列表加载成功:', allItems.length, '条记录');
-                currentFilters = params;
-                filteredItems = [...allItems];
-                
-                const statsYear = params.year || new Date().getFullYear();
-                const statsCategoryId = categoryId || params.category_id || '';
-                await renderHomeStats(statsYear.toString(), statsCategoryId);
-                
-                loading.style.display = 'none';
-                
-                if (filteredItems.length === 0) {
-                    emptyState.style.display = 'block';
-                    return;
+                if (scrollTop < 50) {
+                    searchWrapper.style.opacity = '0';
+                    scrollTimeout = setTimeout(() => { searchWrapper.style.display = 'none'; }, 300);
                 }
-                
-                emptyState.style.display = 'none';
-                renderItems(filteredItems);
-            } catch (error) {
-                console.error('加载记录失败:', error);
-                loading.style.display = 'none';
-                showMessage('加载记录失败: ' + error.message, 'error');
-                // 避免无限重试，只显示错误信息
-            }
-        }
-        
-        // 搜索处理
-        window.handleSearch = debounce(function(searchTerm) {
-            if (!searchTerm.trim()) {
-                filteredItems = [...allItems];
-            } else {
-                const term = searchTerm.toLowerCase();
-                filteredItems = allItems.filter(item => {
-                    const titleMatch = item.title.toLowerCase().includes(term);
-                    const notesMatch = item.notes && item.notes.toLowerCase().includes(term);
-                    return titleMatch || notesMatch;
-                });
-            }
-            
-            const emptyState = document.getElementById('empty-state');
-            const grid = document.getElementById('items-grid');
-            
-            if (filteredItems.length === 0) {
-                emptyState.style.display = 'block';
-                grid.innerHTML = '';
-            } else {
-                emptyState.style.display = 'none';
-                renderItems(filteredItems);
-            }
-        }, 300);
-
-        // 渲染记录卡片
-        function renderItems(items) {
-            const grid = document.getElementById('items-grid');
-            grid.innerHTML = '';
-            items.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'item-card';
-                card.onclick = (e) => {
-                    if (e.target.closest('.item-delete-btn')) return;
-                    showItemDetail(item);
-                };
-                const coverImage = item.images && item.images.length > 0
-                    ? item.images[0].image_url
-                    : '/static/images/placeholder.svg';
-                card.innerHTML = `
-                    <div class="item-card-image">
-                        <div class="item-badge">${item.category_name}</div>
-                        <img src="${coverImage}" loading="lazy" alt="${item.title}" onerror="this.src='/static/images/placeholder.svg'">
-                        <div class="item-overlay">
-                            <h3 class="item-title">${item.title}</h3>
-                            <div class="item-meta">
-                                <span>${formatDate(item.finish_time)}</span>
-                                ${item.images && item.images.length > 1 ? '<span>📷 ' + item.images.length + '</span>' : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'item-delete-btn';
-                deleteBtn.innerHTML = '🗑️';
-                deleteBtn.title = '删除';
-                deleteBtn.style.display = 'none';
-                deleteBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    showConfirmDialog('确定要删除这条记录吗？', () => { deleteItem(item.id); });
-                });
-                card.appendChild(deleteBtn);
-                let longPressTimer, isLongPress = false, deleteBtnVisible = false;
-                card.addEventListener('touchstart', function(e) {
-                    isLongPress = false;
-                    longPressTimer = setTimeout(() => {
-                        isLongPress = true;
-                        deleteBtnVisible = true;
-                        e.preventDefault();
-                        deleteBtn.style.display = 'flex';
-                        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
-                        card.style.transform = 'scale(0.98)';
-                        setTimeout(() => { card.style.transform = ''; }, 200);
-                    }, 2000);
-                });
-                card.addEventListener('touchend', function() {
-                    clearTimeout(longPressTimer);
-                    if (!isLongPress) deleteBtn.style.display = 'none';
-                });
-                card.addEventListener('touchmove', function() {
-                    clearTimeout(longPressTimer);
-                    isLongPress = false;
-                    deleteBtnVisible = false;
-                    deleteBtn.style.display = 'none';
-                });
-                card.addEventListener('click', function(e) {
-                    if (deleteBtnVisible && e.target !== deleteBtn && !deleteBtn.contains(e.target)) {
-                        deleteBtn.style.display = 'none';
-                        deleteBtnVisible = false;
-                    }
-                });
-                card.addEventListener('mouseenter', function() { deleteBtn.style.display = 'flex'; });
-                card.addEventListener('mouseleave', function() { deleteBtn.style.display = 'none'; });
-                card.addEventListener('contextmenu', function(e) {
-                    e.preventDefault();
-                    showConfirmDialog('确定要删除这条记录吗？', () => { deleteItem(item.id); });
-                });
-                grid.appendChild(card);
+                lastScrollTop = scrollTop;
             });
         }
 
@@ -568,88 +635,25 @@
             });
         }
 
-        // 通过分类筛选
+        // 兼容：外部或旧逻辑调用时委托给 Vue
         window.filterByCategory = function(categoryId) {
-            const id = String(categoryId ?? '');
-            document.querySelectorAll('.stat-category-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.dataset.categoryId === id) {
-                    item.classList.add('active');
-                }
-            });
-            
-            // 获取当前选中的年份
-            const activeYearItem = document.querySelector('.stat-year-item.active');
-            const year = activeYearItem ? activeYearItem.dataset.year : '';
-            
-            const params = {};
-            if (id) params.category_id = parseInt(id, 10) || id;
-            if (year) params.year = parseInt(year);
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) { searchInput.value = ''; if (typeof window.handleSearch === 'function') window.handleSearch(''); }
-            const searchClear = document.getElementById('search-clear');
-            if (searchClear) searchClear.style.display = 'none';
-            loadItems(params, id, year);
+            if (window.indexApp) {
+                window.indexApp.selectedCategoryId = categoryId ? String(categoryId) : '';
+                window.indexApp.searchTerm = '';
+                window.indexApp.loadItems();
+            }
         };
-        
-        // 通过年份筛选
         window.filterByYear = function(year) {
-            // 更新年份选中状态
-            document.querySelectorAll('.stat-year-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.dataset.year === year) {
-                    item.classList.add('active');
-                }
-            });
-            
-            // 获取当前选中的分类
-            const activeCategoryItem = document.querySelector('.stat-category-item.active');
-            const categoryId = activeCategoryItem ? activeCategoryItem.dataset.categoryId : '';
-            
-            const params = {};
-            if (categoryId) params.category_id = categoryId;
-            if (year) params.year = parseInt(year);
-            
-            // 清除搜索框
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.value = '';
-                if (typeof window.handleSearch === 'function') {
-                    window.handleSearch('');
-                }
+            if (window.indexApp) {
+                window.indexApp.selectedYear = year ? String(year) : '';
+                window.indexApp.searchTerm = '';
+                window.indexApp.loadItems();
             }
-            const searchClear = document.getElementById('search-clear');
-            if (searchClear) searchClear.style.display = 'none';
-            
-            loadItems(params, categoryId, year);
         };
         
-        // 应用筛选（保留用于其他场景）
+        // 应用筛选：刷新 Vue 列表（详情内添加/删除图片、删除记录等后调用）
         function applyFilters() {
-            // 获取选中的分类
-            const activeCategoryItem = document.querySelector('.stat-category-item.active');
-            const categoryId = activeCategoryItem ? activeCategoryItem.dataset.categoryId : '';
-            
-            // 获取选中的年份
-            const activeYearItem = document.querySelector('.stat-year-item.active');
-            const year = activeYearItem ? activeYearItem.dataset.year : '';
-            
-            const params = {};
-            if (categoryId) params.category_id = categoryId;
-            if (year) params.year = parseInt(year);
-            
-            // 清除搜索框
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.value = '';
-                if (typeof window.handleSearch === 'function') {
-                    window.handleSearch('');
-                }
-            }
-            const searchClear = document.getElementById('search-clear');
-            if (searchClear) searchClear.style.display = 'none';
-            
-            loadItems(params, categoryId, year);
+            if (window.indexApp && typeof window.indexApp.refreshList === 'function') window.indexApp.refreshList();
         }
 
         // 显示项目详情
@@ -679,15 +683,30 @@
                 imagesHTML = `<div class="item-detail-images" id="item-detail-images-${item.id}"></div>`;
             }
             
+            const editTitleValue = (item.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const editDateValue = item.finish_time ? item.finish_time.slice(0, 10) : '';
             dialog.innerHTML = `
                 <div class="item-detail-content">
                     <button class="item-detail-close" onclick="closeDetailDialog(this.closest('.item-detail-overlay'))">✕</button>
                     <div class="item-detail-header">
                         <div class="item-detail-badge">${item.category_name}</div>
-                        <h2 class="item-detail-title">${item.title}</h2>
-                        <div class="item-detail-date">
-                            <span class="date-icon">📅</span>
-                            ${formatDate(item.finish_time)}
+                        <div class="item-detail-view">
+                            <h2 class="item-detail-title">${item.title}</h2>
+                            <div class="item-detail-date">
+                                <span class="date-icon">📅</span>
+                                ${formatDate(item.finish_time)}
+                            </div>
+                        </div>
+                        <div class="item-detail-edit" style="display:none;" data-item-id="${item.id}">
+                            <label class="item-detail-edit-label">标题</label>
+                            <input type="text" class="item-detail-edit-title" value="${editTitleValue}" placeholder="标题">
+                            <label class="item-detail-edit-label">完成时间</label>
+                            <input type="date" class="item-detail-edit-finish" value="${editDateValue}">
+                            <label class="item-detail-edit-no-date"><input type="checkbox" class="item-detail-edit-no-date-cb" onchange="var d=this.closest('.item-detail-edit').querySelector('.item-detail-edit-finish');if(d)d.disabled=this.checked"> 不填完成日期</label>
+                            <div class="item-detail-edit-actions">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="saveEditItem(${item.id}, this.closest('.item-detail-overlay'))">保存</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEditItem(this.closest('.item-detail-overlay'))">取消</button>
+                            </div>
                         </div>
                     </div>
                     ${item.notes ? `
@@ -713,6 +732,7 @@
                         ${imagesHTML}
                     </div>
                     <div class="item-detail-actions">
+                        <button type="button" class="btn btn-secondary" onclick="openEditItemForm(this.closest('.item-detail-overlay'))">编辑</button>
                         <button class="btn btn-danger" onclick="deleteItemFromDetail(${item.id}, this.closest('.item-detail-overlay'))">删除记录</button>
                     </div>
                 </div>
@@ -725,6 +745,7 @@
             overlay.dataset.itemId = item.id;
             overlay.dataset.currentImages = JSON.stringify(item.images || []);
             overlay.dataset.categoryName = item.category_name || '';
+            overlay.dataset.finishTime = item.finish_time || '';
             
             // 为图片添加点击事件（查看大图）
             const imageItems = dialog.querySelectorAll('.item-detail-image-item');
@@ -889,6 +910,64 @@
             }, 300);
         }
         
+        // 打开编辑：显示编辑表单，隐藏标题/日期展示
+        function openEditItemForm(overlay) {
+            const view = overlay.querySelector('.item-detail-view');
+            const edit = overlay.querySelector('.item-detail-edit');
+            if (!view || !edit) return;
+            const noDateCb = edit.querySelector('.item-detail-edit-no-date-cb');
+            const dateInput = edit.querySelector('.item-detail-edit-finish');
+            if (noDateCb) noDateCb.checked = !overlay.dataset.finishTime;
+            if (dateInput) dateInput.disabled = noDateCb && noDateCb.checked;
+            view.style.display = 'none';
+            edit.style.display = 'block';
+            edit.querySelector('.item-detail-edit-title').focus();
+        }
+
+        // 取消编辑
+        function cancelEditItem(overlay) {
+            const view = overlay.querySelector('.item-detail-view');
+            const edit = overlay.querySelector('.item-detail-edit');
+            if (view) view.style.display = '';
+            if (edit) edit.style.display = 'none';
+        }
+
+        // 保存编辑（标题、完成时间）
+        async function saveEditItem(itemId, overlay) {
+            const edit = overlay.querySelector('.item-detail-edit');
+            if (!edit) return;
+            const titleInput = edit.querySelector('.item-detail-edit-title');
+            const dateInput = edit.querySelector('.item-detail-edit-finish');
+            const noDateCb = edit.querySelector('.item-detail-edit-no-date-cb');
+            const title = (titleInput && titleInput.value) ? titleInput.value.trim() : '';
+            if (!title) {
+                if (typeof showMessage === 'function') showMessage('请输入标题', 'error');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('title', title);
+            if (noDateCb && noDateCb.checked) {
+                formData.append('finish_time', '');
+            } else if (dateInput && dateInput.value) {
+                formData.append('finish_time', dateInput.value);
+            }
+            try {
+                await ItemsAPI.update(itemId, formData);
+                if (typeof showMessage === 'function') showMessage('已保存', 'success');
+                const view = overlay.querySelector('.item-detail-view');
+                const titleEl = overlay.querySelector('.item-detail-title');
+                const dateEl = overlay.querySelector('.item-detail-date');
+                if (titleEl) titleEl.textContent = title;
+                const newDate = (noDateCb && noDateCb.checked) ? '' : (dateInput && dateInput.value ? dateInput.value : '');
+                overlay.dataset.finishTime = newDate ? (newDate + 'T00:00:00') : '';
+                if (dateEl) dateEl.innerHTML = '<span class="date-icon">📅</span> ' + (typeof formatDate === 'function' ? formatDate(overlay.dataset.finishTime || null) : (overlay.dataset.finishTime || '—'));
+                cancelEditItem(overlay);
+                applyFilters();
+            } catch (e) {
+                if (typeof showMessage === 'function') showMessage('保存失败: ' + (e.message || ''), 'error');
+            }
+        }
+
         // 从详情对话框删除记录
         async function deleteItemFromDetail(id, overlay) {
             showConfirmDialog('确定要删除这条记录吗？', async () => {
@@ -896,7 +975,7 @@
                     await ItemsAPI.delete(id);
                     showMessage('删除成功', 'success');
                     closeDetailDialog(overlay);
-                    applyFilters(); // 重新加载列表
+                    applyFilters();
                 } catch (error) {
                     showMessage('删除失败: ' + error.message, 'error');
                 }
@@ -908,7 +987,7 @@
             try {
                 await ItemsAPI.delete(id);
                 showMessage('删除成功', 'success');
-                applyFilters(); // 重新加载列表
+                applyFilters();
             } catch (error) {
                 showMessage('删除失败: ' + error.message, 'error');
             }
@@ -1090,15 +1169,10 @@
             },
             
             reloadData: async function() {
-                // 重新加载分类
-                await loadCategories();
-                
-                // 重新加载数据
-                const currentYear = new Date().getFullYear();
-                await loadItems({ year: currentYear }, '', currentYear.toString());
-                
-                // 重新设置筛选器
-                setupFilters();
+                if (window.indexApp) {
+                    await window.indexApp.loadCategories();
+                    await window.indexApp.loadItems();
+                }
             }
         };
 

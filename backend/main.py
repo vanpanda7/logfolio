@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Query
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import os
+import io
 import httpx
 
 from routers import categories, items
@@ -42,6 +44,62 @@ app.add_middleware(
 # 只包含 API 路由
 app.include_router(categories.router)
 app.include_router(items.router)
+
+
+# WebP 缓存目录：首次转换后写入，后续直接读文件，避免重复转换
+WEBP_CACHE_DIR = os.path.join(UPLOAD_DIR, ".webp_cache")
+
+
+def _webp_cache_path(source_path: str) -> str:
+    """源文件路径对应的 WebP 缓存文件路径（含扩展名区分 a.jpg / a.png）"""
+    name = os.path.basename(source_path)
+    base, ext = os.path.splitext(name)
+    ext = (ext or "").lstrip(".")
+    safe_base = "".join(c if c.isalnum() or c in "-_." else "_" for c in base).strip(".") or "img"
+    safe_ext = "".join(c if c.isalnum() else "_" for c in ext) or "img"
+    return os.path.join(WEBP_CACHE_DIR, f"{safe_base}_{safe_ext}.webp")
+
+
+@app.get("/api/serve-webp/{path:path}")
+async def serve_webp(path: str):
+    """将上传目录中的图片以 WebP 格式返回；首次转换后写入磁盘缓存，后续直接读缓存"""
+    if not path or ".." in path or path.startswith("/"):
+        return Response(status_code=400)
+    name = os.path.basename(path)
+    file_path = os.path.join(UPLOAD_DIR, name)
+    if not os.path.isfile(file_path):
+        return Response(status_code=404)
+    cache_path = _webp_cache_path(file_path)
+    src_mtime = os.path.getmtime(file_path)
+    # 有缓存且缓存不旧于源文件则直接返回
+    if os.path.isfile(cache_path) and os.path.getmtime(cache_path) >= src_mtime:
+        try:
+            with open(cache_path, "rb") as f:
+                return Response(content=f.read(), media_type="image/webp")
+        except Exception as e:
+            logger.warning("serve_webp read cache failed for %s: %s", name, e)
+    try:
+        from PIL import Image
+        with Image.open(file_path) as img:
+            img.load()
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGBA")
+            else:
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, "WEBP", quality=85, method=6)
+            data = buf.getvalue()
+        os.makedirs(WEBP_CACHE_DIR, exist_ok=True)
+        try:
+            with open(cache_path, "wb") as f:
+                f.write(data)
+        except Exception as e:
+            logger.warning("serve_webp write cache failed for %s: %s", name, e)
+        return Response(content=data, media_type="image/webp")
+    except Exception as e:
+        logger.warning("serve_webp failed for %s: %s", name, e)
+        return Response(status_code=500)
+
 
 # 提供上传文件的静态访问（如果需要）
 if os.path.exists(UPLOAD_DIR):

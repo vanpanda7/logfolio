@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <title>成就墙 - Logfolio</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260127">
+    <script>window.API_BASE_URL = '/api';</script>
+</head>
+<body>
+    <div class="header-container"></div>
+
+    <main class="main">
+        <div id="wall-page" class="wall-wrapper">
+            <div class="wall-header">
+                <div class="wall-stats">
+                    <span id="wall-stat-label">番 / 游戏</span>
+                    <span id="wall-stat-count" class="wall-stat-value">0</span>
+                    <span class="wall-stat-unit">款</span>
+                </div>
+                <div class="wall-header-actions">
+                    <div id="wall-tabs" class="wall-tabs"></div>
+                    <button type="button" id="wall-export-btn" class="wall-export-btn" title="导出为图片保存">📷 保存为图片</button>
+                </div>
+            </div>
+            <div id="wall-grid" class="wall-grid"></div>
+            <div id="wall-empty" class="wall-empty" style="display: none;">
+                <p>还没有带封面的记录，去<a href="/add">记录一笔</a>吧</p>
+            </div>
+            <footer class="wall-footer">Logfolio 成就墙</footer>
+        </div>
+    </main>
+
+    <div id="wall-fullscreen" class="wall-fullscreen">
+        <button type="button" class="wall-fullscreen-close" aria-label="关闭">✕</button>
+        <img id="wall-fullscreen-img" src="" alt="">
+        <p id="wall-fullscreen-title"></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+    <script src="/static/js/api.js?v=20260127"></script>
+    <script src="/static/js/app.js?v=20260127"></script>
+    <script src="/static/js/components.js?v=20260127"></script>
+    <script src="/static/js/wall.js?v=20260127"></script>
+</body>
+</html>
