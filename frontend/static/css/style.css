@@ -873,6 +873,10 @@ body {
 .home-year-wrap {
     position: relative;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
 }
 .home-year-btn {
     display: inline-flex;
@@ -896,7 +900,8 @@ body {
     color: var(--text-sub);
 }
 .home-quick-add-btn {
-    margin-left: 0.5rem;
+    flex-shrink: 0;
+    margin-left: 0;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--primary);
     border-radius: 10px;
@@ -905,10 +910,14 @@ body {
     font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
+    white-space: nowrap;
 }
 .home-quick-add-btn:hover {
     background: var(--primary);
     color: #fff;
+}
+.home-batch-add-btn {
+    margin-left: 0;
 }
 .home-year-dropdown {
     position: absolute;
@@ -2177,10 +2186,6 @@ body {
     flex: 1;
 }
 
-.home-batch-add-btn {
-    margin-left: 0.5rem;
-}
-
 .confirm-actions {
     display: flex;
     gap: 1rem;
@@ -2997,6 +3002,11 @@ body {
     grid-row: span 2;
 }
 
+.wall-cell-size-2-1 {
+    grid-column: span 2;
+    grid-row: span 1;
+}
+
 .wall-loading {
     grid-column: 1 / -1;
     text-align: center;
@@ -3077,6 +3087,58 @@ body {
     color: rgba(255, 255, 255, 0.9);
     text-align: center;
     max-width: 600px;
+}
+
+.wall-fullscreen-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.wall-fullscreen-btn {
+    padding: 10px 20px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.wall-fullscreen-btn:hover {
+    background: rgba(129, 140, 248, 0.3);
+    border-color: rgba(129, 140, 248, 0.5);
+    color: #fff;
+}
+
+.wall-fullscreen-size {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: center;
+}
+
+.wall-fullscreen-size .wall-size-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-fullscreen-size .wall-size-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.wall-fullscreen-size .wall-size-btn.active {
+    background: rgba(129, 140, 248, 0.4);
+    border-color: rgba(129, 140, 248, 0.6);
+    color: #fff;
 }
 
 @media (max-width: 768px) {
@@ -3709,4 +3771,495 @@ body {
         padding: 0.75rem;
         font-size: 1rem; /* 移动端字体稍大，避免缩放 */
     }
+}
+
+/* --- 成就墙设置面板 --- */
+.wall-settings-btn {
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.3s;
+}
+
+.wall-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: rotate(45deg);
+}
+
+.wall-settings-panel {
+    position: fixed;
+    top: 0;
+    right: -340px;
+    width: 320px;
+    height: 100vh;
+    background: rgba(20, 20, 35, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.3s ease;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+}
+
+.wall-settings-panel.open {
+    right: 0;
+}
+
+.wall-settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wall-settings-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.wall-settings-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.wall-settings-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
+}
+
+.wall-settings-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.wall-settings-group {
+    margin-bottom: 24px;
+}
+
+.wall-settings-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 12px;
+}
+
+.wall-settings-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wall-color-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-color-btn:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.wall-color-btn.active {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.4);
+}
+
+.wall-color-picker {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    padding: 0;
+    background: transparent;
+}
+
+.wall-color-picker::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+.wall-color-picker::-webkit-color-swatch {
+    border-radius: 5px;
+    border: none;
+}
+
+.wall-settings-slider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.wall-settings-slider input[type="range"] {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.wall-settings-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #818cf8;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.wall-settings-slider input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.3);
+}
+
+.wall-settings-slider span {
+    min-width: 48px;
+    text-align: right;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+}
+
+.wall-settings-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wall-reset-btn {
+    width: 100%;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-reset-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+}
+
+.wall-reshuffle-btn {
+    width: 100%;
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(129, 140, 248, 0.4);
+    border-radius: 8px;
+    background: rgba(129, 140, 248, 0.15);
+    color: #a5b4fc;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-reshuffle-btn:hover {
+    background: rgba(129, 140, 248, 0.3);
+    border-color: rgba(129, 140, 248, 0.6);
+    color: #c7d2fe;
+}
+
+.wall-settings-group label.wall-settings-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.wall-settings-group label.wall-settings-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-settings-group label.wall-settings-label input[type="checkbox"]:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.wall-settings-group label.wall-settings-label input[type="checkbox"]:checked {
+    background: #818cf8;
+    border-color: #818cf8;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.wall-detail-large-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-sub);
+    margin-right: auto;
+}
+
+.wall-detail-large-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid var(--border);
+    background: var(--bg-body);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-detail-large-toggle input[type="checkbox"]:hover {
+    border-color: var(--primary);
+}
+
+.wall-detail-large-toggle input[type="checkbox"]:checked {
+    background: var(--primary);
+    border-color: var(--primary);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.wall-size-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+}
+
+.wall-size-label {
+    font-size: 0.85rem;
+    color: var(--text-sub);
+}
+
+.wall-size-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-body);
+    color: var(--text-sub);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-size-btn:hover {
+    border-color: var(--primary);
+    color: var(--text);
+}
+
+.wall-size-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.wall-display-mode-btn {
+    width: 100%;
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    border-radius: 8px;
+    background: rgba(129, 140, 248, 0.2);
+    color: #a5b4fc;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wall-display-mode-btn:hover {
+    background: rgba(129, 140, 248, 0.35);
+    border-color: rgba(129, 140, 248, 0.7);
+    color: #c7d2fe;
+}
+
+/* --- 成就墙展示模式 --- */
+.wall-display-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 4000;
+    background: #0a0a12;
+    display: none;
+    flex-direction: column;
+}
+
+.wall-display-mode.active {
+    display: flex;
+}
+
+.wall-display-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.wall-display-mode:hover .wall-display-header {
+    opacity: 1;
+}
+
+.wall-display-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.wall-display-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.wall-display-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wall-display-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.wall-display-columns {
+    flex: 1;
+    display: flex;
+    gap: 12px;
+    padding: 80px 16px 16px;
+    overflow: hidden;
+}
+
+.wall-display-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: scrollUp var(--scroll-duration, 60s) linear infinite;
+}
+
+.wall-display-column.reverse {
+    animation-name: scrollDown;
+}
+
+.wall-display-column.paused {
+    animation-play-state: paused;
+}
+
+@keyframes scrollUp {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(-50%);
+    }
+}
+
+@keyframes scrollDown {
+    0% {
+        transform: translateY(-50%);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+.wall-display-cell {
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    position: relative;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.wall-display-cell:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+}
+
+.wall-display-cell img {
+    width: 100%;
+    height: auto;
+    display: block;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+}
+
+.wall-display-cell-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.wall-display-cell:hover .wall-display-cell-overlay {
+    opacity: 1;
+}
+
+.wall-display-cell-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

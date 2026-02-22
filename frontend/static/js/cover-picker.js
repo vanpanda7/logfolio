@@ -25,7 +25,7 @@
             '  <div class="cover-picker-header">' +
             '    <input type="text" id="cover-picker-search-input" class="cover-picker-search-input" placeholder="支持中文、英文、日文">' +
             '    <button type="button" id="cover-picker-search-btn" class="btn btn-primary">搜索</button>' +
-            '    <button type="button" id="cover-picker-close-btn" class="cover-picker-close-btn" aria-label="关闭">✕</button>' +
+            // '    <button type="button" id="cover-picker-close-btn" class="cover-picker-close-btn" aria-label="关闭">✕</button>' +
             '  </div>' +
             '  <div id="cover-picker-extra" class="cover-picker-extra" style="display: none;"></div>' +
             '  <div class="cover-picker-content-area">' +
@@ -219,7 +219,7 @@
 
         var searchType = searchState.searchType || 'both';
         var searchInput = el.querySelector('#cover-picker-search-input');
-        searchInput.placeholder = searchType === 'game' ? '输入游戏名搜索封面（Bangumi）' : '输入动漫或漫画名搜索';
+        searchInput.placeholder = searchType === 'game' ? '输入游戏名搜索封面' : '输入动漫或漫画名搜索';
         var initialSearch = (options.initialSearch != null) ? String(options.initialSearch).trim() : '';
         searchInput.value = initialSearch;
         currentOnSelect = options.onSelect || null;

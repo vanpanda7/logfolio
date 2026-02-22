@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <title>成就墙 - Logfolio</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260127">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260222n">
     <script>window.API_BASE_URL = '/api';</script>
 </head>
 <body>
@@ -21,10 +21,71 @@
                 </div>
                 <div class="wall-header-actions">
                     <div id="wall-tabs" class="wall-tabs"></div>
-                    <button type="button" id="wall-export-btn" class="wall-export-btn" title="导出为图片保存">📷 保存为图片</button>
+                    <button type="button" id="wall-settings-btn" class="wall-settings-btn" title="显示设置">⚙</button>
+                    <button type="button" id="wall-export-btn" class="wall-export-btn" title="导出为图片保存">保存为图片</button>
                 </div>
             </div>
             <div id="wall-grid" class="wall-grid"></div>
+            <div id="wall-settings-panel" class="wall-settings-panel">
+                <div class="wall-settings-header">
+                    <span class="wall-settings-title">显示设置</span>
+                    <button type="button" class="wall-settings-close" aria-label="关闭">✕</button>
+                </div>
+                <div class="wall-settings-body">
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">背景颜色</label>
+                        <div class="wall-settings-colors">
+                            <button type="button" class="wall-color-btn" data-bg="default" title="默认深色">默认</button>
+                            <button type="button" class="wall-color-btn" data-bg="#1a1a2e" style="background:#1a1a2e" title="深紫"></button>
+                            <button type="button" class="wall-color-btn" data-bg="#0d1117" style="background:#0d1117" title="GitHub深色"></button>
+                            <button type="button" class="wall-color-btn" data-bg="#1e3a5f" style="background:#1e3a5f" title="深蓝"></button>
+                            <button type="button" class="wall-color-btn" data-bg="#2d3748" style="background:#2d3748" title="石墨"></button>
+                            <button type="button" class="wall-color-btn" data-bg="#1a202c" style="background:#1a202c" title="炭黑"></button>
+                            <button type="button" class="wall-color-btn" data-bg="#2d2d2d" style="background:#2d2d2d" title="中性灰"></button>
+                            <input type="color" class="wall-color-picker" id="wall-custom-bg" title="自定义颜色">
+                        </div>
+                    </div>
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">每行显示个数</label>
+                        <div class="wall-settings-slider">
+                            <input type="range" id="wall-cols" min="3" max="12" value="6">
+                            <span id="wall-cols-value">6</span>
+                        </div>
+                    </div>
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">
+                            <input type="checkbox" id="wall-fullwidth">
+                            全宽显示（取消两侧边距）
+                        </label>
+                    </div>
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">单元格间距</label>
+                        <div class="wall-settings-slider">
+                            <input type="range" id="wall-gap" min="4" max="24" value="10">
+                            <span id="wall-gap-value">10px</span>
+                        </div>
+                    </div>
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">圆角大小</label>
+                        <div class="wall-settings-slider">
+                            <input type="range" id="wall-radius" min="0" max="24" value="10">
+                            <span id="wall-radius-value">10px</span>
+                        </div>
+                    </div>
+                    <div class="wall-settings-group">
+                        <label class="wall-settings-label">展示模式滚动速度</label>
+                        <div class="wall-settings-slider">
+                            <input type="range" id="wall-scroll-speed" min="1" max="10" value="3">
+                            <span id="wall-scroll-speed-value">3</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="wall-settings-footer">
+                    <button type="button" id="wall-reshuffle-btn" class="wall-reshuffle-btn">重新随机布局</button>
+                    <button type="button" id="wall-display-mode-btn" class="wall-display-mode-btn">进入展示模式</button>
+                    <button type="button" id="wall-reset-btn" class="wall-reset-btn">恢复默认</button>
+                </div>
+            </div>
             <div id="wall-empty" class="wall-empty" style="display: none;">
                 <p>还没有带封面的记录，去<a href="/add">记录一笔</a>吧</p>
             </div>
@@ -36,12 +97,33 @@
         <button type="button" class="wall-fullscreen-close" aria-label="关闭">✕</button>
         <img id="wall-fullscreen-img" src="" alt="">
         <p id="wall-fullscreen-title"></p>
+        <div class="wall-fullscreen-size">
+            <button type="button" class="wall-size-btn" data-size="1x1">1×1</button>
+            <button type="button" class="wall-size-btn" data-size="1x2">1×2</button>
+            <button type="button" class="wall-size-btn" data-size="2x1">2×1</button>
+            <button type="button" class="wall-size-btn" data-size="2x2">2×2</button>
+        </div>
+        <div class="wall-fullscreen-actions">
+            <button type="button" id="wall-fullscreen-view" class="wall-fullscreen-btn">查看详情</button>
+            <button type="button" id="wall-fullscreen-edit" class="wall-fullscreen-btn">编辑记录</button>
+        </div>
+    </div>
+
+    <div id="wall-display-mode" class="wall-display-mode">
+        <div class="wall-display-header">
+            <span class="wall-display-title">展示模式</span>
+            <div class="wall-display-controls">
+                <button type="button" id="wall-display-pause" class="wall-display-btn" title="暂停">⏸</button>
+                <button type="button" id="wall-display-close" class="wall-display-btn" title="退出">✕</button>
+            </div>
+        </div>
+        <div class="wall-display-columns" id="wall-display-columns"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
-    <script src="/static/js/api.js?v=20260127"></script>
-    <script src="/static/js/app.js?v=20260127"></script>
-    <script src="/static/js/components.js?v=20260127"></script>
-    <script src="/static/js/wall.js?v=20260127"></script>
+    <script src="/static/js/api.js?v=20260222n"></script>
+    <script src="/static/js/app.js?v=20260222n"></script>
+    <script src="/static/js/components.js?v=20260222n"></script>
+    <script src="/static/js/wall.js?v=20260222n"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import extract, update
+from sqlalchemy import extract, update, func
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -237,6 +237,26 @@ def get_years(db: Session = Depends(get_db), user_id: str = Depends(get_user_id)
         Item.finish_time.isnot(None)
     ).order_by(extract("year", Item.finish_time).desc()).all()
     return {"years": [int(r[0]) for r in rows if r[0] is not None]}
+
+
+@router.get("/category-counts")
+def get_category_counts(
+    year: Optional[int] = Query(None, description="按该年份的 finish_time 统计；不传则统计全部年份"),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id),
+):
+    """按年份返回各分类数量，用于首页分类胶囊数字（不随当前选中的分类变化）"""
+    q = (
+        db.query(Category.name, func.count(Item.id).label("cnt"))
+        .join(Item, Item.category_id == Category.id)
+        .filter(Item.user_id == user_id, Item.is_completed == True)
+    )
+    if year is not None:
+        q = q.filter(extract("year", Item.finish_time) == year)
+    rows = q.group_by(Category.id, Category.name).all()
+    by_category = {name: cnt for name, cnt in rows}
+    total = sum(by_category.values())
+    return {"total": total, "by_category": by_category}
 
 
 def _escape_like(s: str) -> str:

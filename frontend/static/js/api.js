@@ -148,6 +148,12 @@ const ItemsAPI = {
     
     // 获取有记录的年份列表
     getAvailableYears: () => apiRequest('/items/years'),
+
+    // 按年份获取各分类数量（不传 year 为全部年份），用于首页分类胶囊数字
+    getCategoryCounts: (year) => {
+        const params = year != null && year !== '' ? new URLSearchParams({ year }) : '';
+        return apiRequest(`/items/category-counts${params ? '?' + params : ''}`);
+    },
     
     // 添加图片
     addImages: async (itemId, formData) => {

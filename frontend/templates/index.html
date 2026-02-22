@@ -47,6 +47,10 @@
                             </div>
                         </div>
                         <div class="home-year-wrap">
+                            <template v-if="!selectedYear">
+                                <button type="button" class="home-quick-add-btn" title="搜索后直接添加为历史记录" @click="openQuickAdd">添加</button>
+                                <button type="button" class="home-quick-add-btn home-batch-add-btn" title="每行一个标题，批量创建记录" @click="openBatchAdd">批量添加</button>
+                            </template>
                             <button type="button" class="home-year-btn" @click.stop="yearDropdownOpen = !yearDropdownOpen">
                                 <span>{{ yearLabel }}</span>
                                 <span class="home-year-chevron">▼</span>
@@ -54,8 +58,6 @@
                             <div class="home-year-dropdown" v-show="yearDropdownOpen" @click.stop>
                                 <button type="button" v-for="y in yearOptions" :key="y" :class="['stat-year-item','home-year-option', { active: selectedYear === y }]" :data-year="y" @click="selectYear(y); yearDropdownOpen = false">{{ y === '' ? '全部年份' : y }}</button>
                             </div>
-                            <button type="button" v-show="!selectedYear" class="home-quick-add-btn" title="搜索后直接添加为历史记录" @click="openQuickAdd">+ 快捷添加</button>
-                            <button type="button" v-show="!selectedYear" class="home-quick-add-btn home-batch-add-btn" title="每行一个标题，批量创建记录" @click="openBatchAdd">批量添加</button>
                         </div>
                     </div>
                     <div class="home-chips">
@@ -87,7 +89,7 @@
                                     <h3 class="item-title">{{ item.title }}</h3>
                                     <div class="item-meta">
                                         <span v-if="item.finish_time">{{ formatDate(item.finish_time) }}</span>
-                                        <span v-if="item.images && item.images.length > 1">📷 {{ item.images.length }}</span>
+                                        <span v-if="item.images && item.images.length > 1">{{ item.images.length }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -157,7 +159,6 @@
                     searchDebounceTimer: null,
                     yearDropdownOpen: false,
                     availableYears: [],
-                    byCategoryCounts: {},
                     PAGE_SIZE: 20,
                     PULL_TRIGGER_PX: 72,
                     batchAddOpen: false,
@@ -166,6 +167,8 @@
                     batchAdding: false,
                     batchAddDone: 0,
                     batchAddTotal: 0,
+                    chipsTotal: 0,
+                    chipsByCategory: {},
                 };
             },
             computed: {
@@ -177,12 +180,12 @@
                     return list;
                 },
                 categoryChips() {
-                    const list = [{ id: '', name: '全部', count: this.statTotal }];
+                    const list = [{ id: '', name: '全部', count: this.chipsTotal }];
                     (this.categories || []).forEach(cat => {
                         list.push({
                             id: String(cat.id),
                             name: cat.name || '',
-                            count: this.byCategoryCounts[cat.name] ?? 0
+                            count: this.chipsByCategory[cat.name] ?? 0
                         });
                     });
                     return list;
@@ -231,6 +234,17 @@
                         if (typeof showMessage === 'function') showMessage('加载分类失败: ' + (e.message || ''), 'error');
                     }
                 },
+                async loadCategoryCounts() {
+                    try {
+                        const year = this.selectedYear ? parseInt(this.selectedYear, 10) : null;
+                        const res = await ItemsAPI.getCategoryCounts(year);
+                        this.chipsTotal = res.total ?? 0;
+                        this.chipsByCategory = res.by_category || {};
+                    } catch (e) {
+                        this.chipsTotal = 0;
+                        this.chipsByCategory = {};
+                    }
+                },
                 async loadItems() {
                     this.loading = true;
                     try {
@@ -241,11 +255,6 @@
                         this.items = list;
                         this.totalCount = total;
                         this.hasMore = this.items.length < this.totalCount;
-                        this.byCategoryCounts = {};
-                        this.items.forEach(item => {
-                            const name = (item.category && item.category.name) || item.category_name || '';
-                            if (name) this.byCategoryCounts[name] = (this.byCategoryCounts[name] || 0) + 1;
-                        });
                         let years = [];
                         try {
                             const res = await ItemsAPI.getAvailableYears();
@@ -268,10 +277,6 @@
                         const list = Array.isArray(data) ? data : (data.items || []);
                         this.items = this.items.concat(list);
                         this.hasMore = this.items.length < this.totalCount;
-                        list.forEach(item => {
-                            const name = (item.category && item.category.name) || item.category_name || '';
-                            if (name) this.byCategoryCounts[name] = (this.byCategoryCounts[name] || 0) + 1;
-                        });
                     } catch (error) {
                         if (typeof showMessage === 'function') showMessage('加载更多失败: ' + (error.message || ''), 'error');
                     } finally {
@@ -308,11 +313,16 @@
                     }
                 },
                 refreshList() {
+                    this.loadCategoryCounts();
                     return this.loadItems();
                 },
                 selectYear(y) {
                     this.selectedYear = y === '' ? '' : String(y);
+                    if (this.selectedYear === '' && this.selectedCategoryId === '' && this.categories.length) {
+                        this.selectedCategoryId = String(this.categories[0].id);
+                    }
                     this.searchTerm = '';
+                    this.loadCategoryCounts();
                     this.loadItems();
                 },
                 selectCategory(id) {
@@ -444,16 +454,29 @@
             try {
                 if (typeof window.renderHeader === 'function') window.renderHeader('index');
                 await root.loadCategories();
+                await root.loadCategoryCounts();
                 await root.loadItems();
                 setupScrollSearch();
                 const urlParams = new URLSearchParams(window.location.search);
                 const openItemId = urlParams.get('item_id');
+                const shouldEdit = urlParams.get('edit');
                 if (openItemId) {
                     try {
                         const item = await ItemsAPI.getById(openItemId);
-                        if (item) showItemDetail(item);
+                        if (item) {
+                            showItemDetail(item);
+                            if (shouldEdit === '1') {
+                                setTimeout(function() {
+                                    var overlay = document.querySelector('.item-detail-overlay');
+                                    if (overlay) openEditItemForm(overlay);
+                                }, 100);
+                            }
+                        }
                     } catch (e) {
                         if (typeof showMessage === 'function') showMessage('未找到该记录', 'error');
+                    }
+                    if (window.history.replaceState) {
+                        window.history.replaceState({}, '', window.location.pathname);
                     }
                 }
             } catch (error) {
