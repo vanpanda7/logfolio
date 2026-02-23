@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Logfolio</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260127">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260222t">
     <script>
         // 使用相对路径，通过 OpenResty 代理（包含认证）
         window.API_BASE_URL = '/api';
@@ -39,14 +39,10 @@
                         <label for="finish_time">完成日期 <span class="required" id="finish-time-required">*</span></label>
                         <input type="date" id="finish_time" name="finish_time" required placeholder="选择日期">
                         <div class="form-group when-watch-option" id="when-watch-option" style="display: none; margin-top: 0.75rem;">
-                            <span class="when-watch-label">区分：</span>
-                            <label class="radio-inline"><input type="radio" name="when_watch" value="now" id="when_watch_now" checked> 正在看/现在在追</label>
-                            <label class="radio-inline"><input type="radio" name="when_watch" value="past" id="when_watch_past"> 以前看的</label>
-                            <div class="form-group past-no-date-option" id="past-no-date-option" style="display: none; margin-top: 0.5rem; width: 100%;">
-                                <label class="checkbox-inline">
-                                    <input type="checkbox" id="skip_finish_time_past" name="skip_finish_time" value="1" checked> 不填完成日期（仅全部年份中展示）
-                                </label>
-                            </div>
+                            <label class="checkbox-inline">
+                                <input type="checkbox" id="is_past_watch">
+                                以前看的（不填日期）
+                            </label>
                         </div>
                         <div class="form-group no-date-option" id="no-date-option" style="display: none; margin-top: 0.5rem;">
                             <label class="checkbox-inline">
@@ -90,10 +86,10 @@
         </div>
     </main>
 
-    <script src="/static/js/api.js?v=20260127"></script>
-    <script src="/static/js/cover-picker.js?v=20260127"></script>
-    <script src="/static/js/app.js?v=20260127"></script>
-    <script src="/static/js/components.js?v=20260127"></script>
+    <script src="/static/js/api.js?v=20260222t"></script>
+    <script src="/static/js/cover-picker.js?v=20260222t"></script>
+    <script src="/static/js/app.js?v=20260222t"></script>
+    <script src="/static/js/components.js?v=20260222t"></script>
     <script>
         // 初始化头部
         document.addEventListener('DOMContentLoaded', function() {
@@ -167,7 +163,6 @@
             const group = document.getElementById('cover-search-group');
             const whenWatchOpt = document.getElementById('when-watch-option');
             const noDateOpt = document.getElementById('no-date-option');
-            const pastNoDateOpt = document.getElementById('past-no-date-option');
             const finishInput = document.getElementById('finish_time');
             const requiredSpan = document.getElementById('finish-time-required');
             const activeTab = document.querySelector('.category-tab.active');
@@ -180,32 +175,20 @@
             if (coverLabel) coverLabel.textContent = isGameCategory ? '游戏封面（Bangumi）' : '动漫/漫画封面';
             if (whenWatchOpt) whenWatchOpt.style.display = showWhenWatch ? 'block' : 'none';
             if (noDateOpt) noDateOpt.style.display = showWhenWatch ? 'none' : 'block';
-            const isNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
-            const isPast = document.getElementById('when_watch_past') && document.getElementById('when_watch_past').checked;
+            const isPastWatch = document.getElementById('is_past_watch') && document.getElementById('is_past_watch').checked;
             const skipChecked = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
-            const skipPastChecked = document.getElementById('skip_finish_time_past') && document.getElementById('skip_finish_time_past').checked;
-            if (pastNoDateOpt) pastNoDateOpt.style.display = (showWhenWatch && isPast) ? 'block' : 'none';
             if (finishInput && requiredSpan) {
-                const optional = (showWhenWatch && isNow) || (showWhenWatch && isPast && skipPastChecked) || (!showWhenWatch && skipChecked);
+                const optional = (showWhenWatch && isPastWatch) || (!showWhenWatch && skipChecked);
                 finishInput.required = !optional;
                 requiredSpan.style.display = optional ? 'none' : '';
-                finishInput.disabled = showWhenWatch && isNow;
+                finishInput.disabled = showWhenWatch && isPastWatch;
             }
         }
         document.addEventListener('DOMContentLoaded', function() {
             const skipCb = document.getElementById('skip_finish_time');
             if (skipCb) skipCb.addEventListener('change', updateCoverSearchVisibility);
-            const skipPastCb = document.getElementById('skip_finish_time_past');
-            if (skipPastCb) skipPastCb.addEventListener('change', updateCoverSearchVisibility);
-            document.querySelectorAll('input[name="when_watch"]').forEach(function(radio) {
-                radio.addEventListener('change', function() {
-                    if (document.getElementById('when_watch_past') && document.getElementById('when_watch_past').checked) {
-                        var cb = document.getElementById('skip_finish_time_past');
-                        if (cb) cb.checked = true;
-                    }
-                    updateCoverSearchVisibility();
-                });
-            });
+            const isPastWatchCb = document.getElementById('is_past_watch');
+            if (isPastWatchCb) isPastWatchCb.addEventListener('change', updateCoverSearchVisibility);
         });
 
         // 封面选择：使用全局 CoverPicker 组件（动漫/漫画 type=both，游戏 type=game）
@@ -239,10 +222,14 @@
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
             formData.append('category_id', categoryId);
-            const whenWatchNow = document.getElementById('when_watch_now') && document.getElementById('when_watch_now').checked;
-            const skipFinishTime = (document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked) ||
-                (document.getElementById('skip_finish_time_past') && document.getElementById('skip_finish_time_past').checked);
-            if (whenWatchNow || skipFinishTime) {
+            const isPastWatch = document.getElementById('is_past_watch') && document.getElementById('is_past_watch').checked;
+            const skipFinishTime = document.getElementById('skip_finish_time') && document.getElementById('skip_finish_time').checked;
+            const activeTab = document.querySelector('.category-tab.active');
+            const categoryName = (activeTab && activeTab.dataset.categoryName) ? activeTab.dataset.categoryName.trim() : '';
+            const isGameCategory = categoryName.indexOf('游戏') !== -1;
+            const isAnimeCategory = categoryName.indexOf('动漫') !== -1 || categoryName.indexOf('动画') !== -1 || categoryName.indexOf('漫画') !== -1;
+            const showWhenWatch = isAnimeCategory || isGameCategory;
+            if ((showWhenWatch && isPastWatch) || (!showWhenWatch && skipFinishTime)) {
                 formData.append('skip_finish_time', '1');
             } else {
                 formData.append('finish_time', document.getElementById('finish_time').value);
@@ -277,9 +264,7 @@
             document.getElementById('cover-selected-img').src = '';
             document.getElementById('cover-selected-title').textContent = '';
             if (document.getElementById('skip_finish_time')) document.getElementById('skip_finish_time').checked = false;
-            if (document.getElementById('skip_finish_time_past')) document.getElementById('skip_finish_time_past').checked = false;
-            if (document.getElementById('when_watch_now')) document.getElementById('when_watch_now').checked = true;
-            if (document.getElementById('when_watch_past')) document.getElementById('when_watch_past').checked = false;
+            if (document.getElementById('is_past_watch')) document.getElementById('is_past_watch').checked = false;
             setTimeout(updateCoverSearchVisibility, 0);
         });
 
