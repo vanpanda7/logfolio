@@ -138,67 +138,86 @@ async def anime_search(
     has_next_page = False
     limit_per_page = 24
 
-    # Bangumi（支持中文搜索，含动漫/漫画/游戏）
-    if source in ("bangumi", "both") and type != "anime" and type != "manga":
-        try:
-            if type == "game":
-                filter_types = [4]  # 游戏
-            elif type == "all":
-                filter_types = [2, 1, 4]  # 动画、书籍、游戏
-            else:
-                filter_types = [2]  # 动画
-                if type in ("manga", "both"):
-                    filter_types.append(1)  # 书籍
-            offset = (page - 1) * limit_per_page
-            async with httpx.AsyncClient(timeout=12.0, headers={"User-Agent": BANGUMI_USER_AGENT}) as client:
-                r = await client.post(
-                    f"{BANGUMI_BASE}/v0/search/subjects",
-                    json={"keyword": q, "filter": {"type": filter_types}},
-                    params={"limit": limit_per_page, "offset": offset},
-                )
-                r.raise_for_status()
-                data = r.json()
-                list_data = data.get("data") or data.get("list") or []
-                for s in list_data:
-                    item = _bangumi_subject_to_item(s)
-                    if item:
-                        items_list.append(item)
-                if len(list_data) >= limit_per_page:
-                    has_next_page = True
-        except Exception as e:
-            logging.getLogger("uvicorn.error").warning("Bangumi search failed: %s", e)
+    async def search_bangumi():
+        nonlocal has_next_page
+        if source in ("bangumi", "both") and type != "anime" and type != "manga":
+            try:
+                if type == "game":
+                    filter_types = [4]
+                elif type == "all":
+                    filter_types = [2, 1, 4]
+                else:
+                    filter_types = [2]
+                    if type in ("manga", "both"):
+                        filter_types.append(1)
+                offset = (page - 1) * limit_per_page
+                async with httpx.AsyncClient(timeout=12.0, headers={"User-Agent": BANGUMI_USER_AGENT}) as client:
+                    r = await client.post(
+                        f"{BANGUMI_BASE}/v0/search/subjects",
+                        json={"keyword": q, "filter": {"type": filter_types}},
+                        params={"limit": limit_per_page, "offset": offset},
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    list_data = data.get("data") or data.get("list") or []
+                    results = []
+                    for s in list_data:
+                        item = _bangumi_subject_to_item(s)
+                        if item:
+                            results.append(item)
+                    if len(list_data) >= limit_per_page:
+                        has_next_page = True
+                    return results
+            except Exception as e:
+                logging.getLogger("uvicorn.error").warning("Bangumi search failed: %s", e)
+        return []
 
-    # MyAnimeList / Jikan（仅动漫/漫画，无游戏）
-    if source in ("mal", "both") and type not in ("game",):
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            if type in ("anime", "both", "all"):
-                try:
+    async def search_mal_anime():
+        nonlocal has_next_page
+        if source in ("mal", "both") and type in ("anime", "both", "all"):
+            try:
+                async with httpx.AsyncClient(timeout=12.0) as client:
                     r = await client.get(f"{JIKAN_BASE}/anime", params={"q": q, "limit": 12, "page": page})
                     r.raise_for_status()
                     data = r.json()
                     pagination = data.get("pagination") or {}
                     if pagination.get("has_next_page"):
                         has_next_page = True
+                    results = []
                     for a in (data.get("data") or []):
                         url = (a.get("images") or {}).get("jpg", {}).get("large_image_url") or (a.get("images") or {}).get("jpg", {}).get("image_url")
                         if url:
-                            items_list.append({"type": "动漫", "title": a.get("title"), "title_japanese": a.get("title_japanese"), "url": url})
-                except Exception as e:
-                    logging.getLogger("uvicorn.error").warning("Jikan anime search failed: %s", e)
-            if type in ("manga", "both", "all"):
-                try:
+                            results.append({"type": "动漫", "title": a.get("title"), "title_japanese": a.get("title_japanese"), "url": url})
+                    return results
+            except Exception as e:
+                logging.getLogger("uvicorn.error").warning("Jikan anime search failed: %s", e)
+        return []
+
+    async def search_mal_manga():
+        nonlocal has_next_page
+        if source in ("mal", "both") and type in ("manga", "both", "all"):
+            try:
+                async with httpx.AsyncClient(timeout=12.0) as client:
                     r = await client.get(f"{JIKAN_BASE}/manga", params={"q": q, "limit": 12, "page": page})
                     r.raise_for_status()
                     data = r.json()
                     pagination = data.get("pagination") or {}
                     if pagination.get("has_next_page"):
                         has_next_page = True
+                    results = []
                     for m in (data.get("data") or []):
                         url = (m.get("images") or {}).get("jpg", {}).get("large_image_url") or (m.get("images") or {}).get("jpg", {}).get("image_url")
                         if url:
-                            items_list.append({"type": "漫画", "title": m.get("title"), "title_japanese": m.get("title_japanese"), "url": url})
-                except Exception as e:
-                    logging.getLogger("uvicorn.error").warning("Jikan manga search failed: %s", e)
+                            results.append({"type": "漫画", "title": m.get("title"), "title_japanese": m.get("title_japanese"), "url": url})
+                    return results
+            except Exception as e:
+                logging.getLogger("uvicorn.error").warning("Jikan manga search failed: %s", e)
+        return []
+
+    import asyncio
+    results = await asyncio.gather(search_bangumi(), search_mal_anime(), search_mal_manga())
+    for r in results:
+        items_list.extend(r)
 
     return {"data": items_list, "has_next_page": has_next_page}
 

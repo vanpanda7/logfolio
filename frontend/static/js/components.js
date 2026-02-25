@@ -4,17 +4,10 @@
 
 /**
  * 渲染公共头部导航
- * 确保在所有浏览器中都能正常工作
  */
 function renderHeader(activePage = '') {
-    console.log('renderHeader 被调用，activePage:', activePage);
-    console.log('document.readyState:', document.readyState);
-    
-    // 确保 DOM 已加载
     if (document.readyState === 'loading') {
-        console.log('DOM 还在加载中，延迟执行 renderHeader');
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM 加载完成，执行 renderHeader');
             renderHeader(activePage);
         });
         return;
@@ -39,18 +32,12 @@ function renderHeader(activePage = '') {
     `;
     
     const headerContainer = document.querySelector('.header-container');
-    console.log('headerContainer 是否存在:', !!headerContainer);
     
     if (headerContainer) {
         headerContainer.innerHTML = headerHTML;
-        console.log('Header 已渲染到 .header-container');
     } else {
-        // 如果没有容器，插入到body开头
-        console.log('未找到 .header-container，插入到 body 开头');
         document.body.insertAdjacentHTML('afterbegin', headerHTML);
     }
-    
-    console.log('renderHeader 执行完成');
 }
 
 // 立即导出到全局，确保在任何地方都能访问
@@ -177,29 +164,19 @@ async function showStatistics(year = null, categoryId = '') {
     if (!statsContainer) return;
     
     try {
-        let stats;
-        if (year) {
-            stats = await ItemsAPI.getStatistics(year);
-        } else {
-            // 获取当前年份的统计
-            const currentYear = new Date().getFullYear();
-            stats = await ItemsAPI.getStatistics(currentYear);
-            year = currentYear.toString();
-        }
+        const currentYear = (year || new Date().getFullYear()).toString();
+        year = year || currentYear;
         
-        // 获取有记录的年份列表
-        let availableYears = [];
-        try {
-            const yearsResponse = await ItemsAPI.getAvailableYears();
-            availableYears = yearsResponse.years || [];
-        } catch (error) {
-            console.error('获取年份列表失败:', error);
-        }
+        const [stats, yearsResponse] = await Promise.all([
+            ItemsAPI.getStatistics(year),
+            ItemsAPI.getAvailableYears().catch(() => ({ years: [] }))
+        ]);
+        
+        const availableYears = yearsResponse.years || [];
         
         statsContainer.innerHTML = createStatisticsCard(stats, categoryId, year, availableYears);
         statsContainer.classList.add('show');
         
-        // 重新绑定筛选器事件（因为HTML被重新生成了）
         if (typeof window.setupFilterEvents === 'function') {
             window.setupFilterEvents();
         }

@@ -3,42 +3,26 @@
  * 统一处理所有对后端API的Fetch请求
  */
 
-// API 基础地址 - 可以根据环境配置
-// 默认使用相对路径 '/api'（适用于前后端同域名部署）
-// 开发环境：如果前后端分离，可以设置 window.API_BASE_URL = 'http://localhost:8000/api'
-// 生产环境：如果前后端分离，可以设置 window.API_BASE_URL = 'http://your-api-domain.com/api'
 const API_BASE = window.API_BASE_URL || '/api';
 
-/**
- * 通用请求函数
- */
+let categoryCache = { data: null, timestamp: 0 };
+const CATEGORY_CACHE_TTL = 5 * 60 * 1000;
+
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
         },
-        // 同源请求时，浏览器会自动携带 Basic Auth 认证信息
-        credentials: 'same-origin',  // 同源请求，浏览器会自动传递认证信息
+        credentials: 'same-origin',
     };
     
     const config = { ...defaultOptions, ...options };
     
-    console.log('API 请求:', url, options.method || 'GET');
-    console.log('API_BASE:', API_BASE);
-    console.log('完整 URL:', url);
-    
     try {
         const response = await fetch(url, config);
         
-        console.log('API 响应:', response.status, response.statusText, url);
-        console.log('响应头:', Object.fromEntries(response.headers.entries()));
-        
-        // 如果是 401 未授权，可能是认证问题
         if (response.status === 401) {
-            console.error('API 认证失败: 401 Unauthorized - 请检查 Basic Auth 配置');
-            console.error('提示: 请确保已登录并输入了正确的用户名和密码');
-            // 可以尝试重新触发认证（但这通常由浏览器自动处理）
             const error = new Error('认证失败，请检查用户名和密码。如果已登录，请刷新页面重试。');
             error.status = 401;
             throw error;
@@ -51,28 +35,16 @@ async function apiRequest(endpoint, options = {}) {
             } catch (e) {
                 errorData = { detail: response.statusText };
             }
-            console.error('API 错误:', response.status, errorData);
             const error = new Error(errorData.detail || `HTTP error! status: ${response.status}`);
             error.status = response.status;
             throw error;
         }
         
-        const data = await response.json();
-        console.log('API 成功:', url, '返回数据长度:', JSON.stringify(data).length);
-        return data;
+        return await response.json();
     } catch (error) {
-        console.error('API请求失败:', url, error);
-        console.error('错误详情:', {
-            message: error.message,
-            status: error.status,
-            stack: error.stack
-        });
-        
-        // 如果是网络错误，提供更友好的提示
         if (error instanceof TypeError && error.message.includes('fetch')) {
             throw new Error('网络请求失败，请检查网络连接或服务器状态');
         }
-        
         throw error;
     }
 }
@@ -81,18 +53,31 @@ async function apiRequest(endpoint, options = {}) {
  * 分类相关API
  */
 const CategoriesAPI = {
-    // 获取所有分类
-    getAll: () => apiRequest('/categories/'),
+    getAll: (useCache = true) => {
+        const now = Date.now();
+        if (useCache && categoryCache.data && (now - categoryCache.timestamp) < CATEGORY_CACHE_TTL) {
+            return Promise.resolve(categoryCache.data);
+        }
+        return apiRequest('/categories/').then(data => {
+            categoryCache.data = data;
+            categoryCache.timestamp = now;
+            return data;
+        });
+    },
     
-    // 创建分类
     create: (name) => apiRequest('/categories/', {
         method: 'POST',
         body: JSON.stringify({ name }),
+    }).then(data => {
+        categoryCache.data = null;
+        return data;
     }),
     
-    // 删除分类
     delete: (id) => apiRequest(`/categories/${id}`, {
         method: 'DELETE',
+    }).then(data => {
+        categoryCache.data = null;
+        return data;
     }),
 };
 
@@ -124,8 +109,14 @@ const ItemsAPI = {
         const url = `${API_BASE}/items/`;
         const response = await fetch(url, {
             method: 'POST',
-            body: formData, // FormData 不需要设置 Content-Type
+            body: formData,
         });
+        
+        if (response.status === 401) {
+            const error = new Error('认证失败，请检查用户名和密码。如果已登录，请刷新页面重试。');
+            error.status = 401;
+            throw error;
+        }
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -209,8 +200,14 @@ const ItemsAPI = {
         const url = `${API_BASE}/items/${itemId}`;
         const response = await fetch(url, {
             method: 'PUT',
-            body: formData, // FormData 不需要设置 Content-Type
+            body: formData,
         });
+        
+        if (response.status === 401) {
+            const error = new Error('认证失败，请检查用户名和密码。如果已登录，请刷新页面重试。');
+            error.status = 401;
+            throw error;
+        }
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: response.statusText }));

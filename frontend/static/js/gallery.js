@@ -94,11 +94,18 @@ async function initCoolGallery() {
 /**
  * 加载指定年份的年度墙数据
  */
+let _galleryLoading = false;
 async function loadGalleryYear(year) {
+    if (_galleryLoading) return;
+    _galleryLoading = true;
+    
     const photoWall = document.getElementById('photo-wall');
     const galleryTitle = document.getElementById('gallery-title');
     
-    if (!photoWall) return;
+    if (!photoWall) {
+        _galleryLoading = false;
+        return;
+    }
     
     if (galleryTitle) {
         galleryTitle.textContent = `${year} RECAP`;
@@ -113,30 +120,30 @@ async function loadGalleryYear(year) {
         
         if (photos.length === 0) {
             photoWall.innerHTML = '<div class="empty-state" style="color: rgba(255,255,255,0.7); padding: 3rem;"><div class="empty-icon">📷</div><p>这一年还没有带图片的记录</p></div>';
+            _galleryLoading = false;
             return;
         }
         
-        // 渲染照片墙
+        const fragment = document.createDocumentFragment();
         photos.forEach((photo, index) => {
             const card = createPhotoCard(photo, index);
-            photoWall.appendChild(card);
-            
-            // 使用 IntersectionObserver 实现滚动入场动画
-            const observer = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('visible');
-                            observer.unobserve(entry.target);
-                        }
-                    });
-                },
-                {
-                    threshold: 0.1,
-                    rootMargin: '50px'
-                }
-            );
-            
+            fragment.appendChild(card);
+        });
+        photoWall.appendChild(fragment);
+        
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.1, rootMargin: '50px' }
+        );
+        
+        photoWall.querySelectorAll('.photo-card').forEach(card => {
             observer.observe(card);
         });
         
@@ -146,6 +153,7 @@ async function loadGalleryYear(year) {
             showMessage('加载年度墙失败: ' + error.message, 'error');
         }
     }
+    _galleryLoading = false;
 }
 
 /**

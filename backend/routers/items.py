@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
-from sqlalchemy.orm import Session
-from sqlalchemy import extract, update, func
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import extract, update, func, case
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -134,23 +134,15 @@ async def create_item(
 
 @router.get("/todos")
 def get_todos(db: Session = Depends(get_db), user_id: str = Depends(get_user_id)):
-    """获取待办列表"""
-    # 有截止日期的在前，按时间升序；没有截止日期的按创建时间降序
-    # 使用两个查询合并：先查有截止日期的，再查没有截止日期的
-    items_with_due = db.query(Item).filter(
-        Item.user_id == user_id,
-        Item.is_completed == False,
-        Item.due_time.isnot(None)
-    ).order_by(Item.due_time.asc()).all()
-    
-    items_without_due = db.query(Item).filter(
-        Item.user_id == user_id,
-        Item.is_completed == False,
-        Item.due_time.is_(None)
-    ).order_by(Item.created_at.desc()).all()
-    
-    # 合并结果：有截止日期的在前，没有截止日期的在后
-    return [_item_to_response(i) for i in items_with_due + items_without_due]
+    """获取待办列表：先按有无截止日期排序（无在前），再按截止日期升序，最后按创建时间降序"""
+    items = (
+        db.query(Item)
+        .options(joinedload(Item.category), selectinload(Item.images))
+        .filter(Item.user_id == user_id, Item.is_completed == False)
+        .order_by(Item.due_time.is_(None), Item.due_time.asc(), Item.created_at.desc())
+        .all()
+    )
+    return [_item_to_response(i) for i in items]
 
 
 @router.put("/{item_id}")
@@ -276,32 +268,36 @@ def get_items(
     user_id: str = Depends(get_user_id),
 ):
     from sqlalchemy import or_
-    q = db.query(Item).filter(Item.user_id == user_id)
     
+    base_filters = [Item.user_id == user_id]
     if is_completed is None:
         is_completed = True
-    q = q.filter(Item.is_completed == is_completed)
-    
+    base_filters.append(Item.is_completed == is_completed)
     if category_id:
-        q = q.filter(Item.category_id == category_id)
+        base_filters.append(Item.category_id == category_id)
     if year:
         if is_completed:
-            q = q.filter(extract("year", Item.finish_time) == year)
+            base_filters.append(extract("year", Item.finish_time) == year)
         else:
-            q = q.filter(extract("year", Item.due_time) == year)
-    
+            base_filters.append(extract("year", Item.due_time) == year)
     if search and search.strip():
         term = _escape_like(search.strip())
         pattern = f"%{term}%"
-        q = q.filter(
+        base_filters.append(
             or_(
                 Item.title.ilike(pattern, escape="\\"),
                 Item.notes.ilike(pattern, escape="\\"),
             )
         )
     
-    q = q.order_by(Item.created_at.desc())
-    total = q.count()
+    total = db.query(func.count(Item.id)).filter(*base_filters).scalar()
+    
+    q = (
+        db.query(Item)
+        .options(joinedload(Item.category), selectinload(Item.images))
+        .filter(*base_filters)
+        .order_by(Item.created_at.desc())
+    )
     if limit is not None:
         q = q.offset(offset).limit(limit)
     items = q.all()
@@ -320,13 +316,14 @@ def get_achievement_wall(
     """成就墙：按分类返回已完成且带封面的记录。category_id 必传，为当前用户的分类 id（前端按用户分组展示）"""
     if category_id is None:
         return {"items": [], "total": 0}
-    q = (
+    items = (
         db.query(Item)
+        .options(joinedload(Item.category), selectinload(Item.images))
         .join(ItemImage)
         .filter(Item.user_id == user_id, Item.is_completed == True, Item.category_id == category_id)
         .order_by(Item.created_at.desc())
+        .all()
     )
-    items = q.all()
     seen_ids = set()
     result = []
     for item in items:
@@ -473,13 +470,17 @@ def delete_image(image_id: int, db: Session = Depends(get_db), user_id: str = De
 
 @router.get("/statistics/year/{year}")
 def get_year_statistics(year: int, db: Session = Depends(get_db), user_id: str = Depends(get_user_id)):
-    # 只统计已完成的记录
-    items = db.query(Item).filter(
-        Item.user_id == user_id,
-        Item.is_completed == True,
-        Item.finish_time.isnot(None),
-        extract("year", Item.finish_time) == year
-    ).all()
+    items = (
+        db.query(Item)
+        .options(joinedload(Item.category))
+        .filter(
+            Item.user_id == user_id,
+            Item.is_completed == True,
+            Item.finish_time.isnot(None),
+            extract("year", Item.finish_time) == year
+        )
+        .all()
+    )
     by_cat = {}
     by_month = {str(i): 0 for i in range(1, 13)}
     for i in items:
@@ -490,16 +491,19 @@ def get_year_statistics(year: int, db: Session = Depends(get_db), user_id: str =
 @router.get("/annual-gallery/{year}")
 def get_annual_gallery(year: int, db: Session = Depends(get_db), user_id: str = Depends(get_user_id)):
     """获取指定年份的所有带图记录，用于酷炫展示"""
-    # 联表查询：只选出有图片的记录，并去重（一个item可能有多张图片）
-    # 只返回已完成的记录
-    items = db.query(Item).join(ItemImage).filter(
-        Item.user_id == user_id,
-        Item.is_completed == True,
-        Item.finish_time.isnot(None),
-        extract('year', Item.finish_time) == year
-    ).order_by(Item.finish_time.asc()).all() # 按时间正序，像放电影一样展示一年
-    
-    # 去重并返回（每个item只返回一次，使用第一张图片）
+    items = (
+        db.query(Item)
+        .options(joinedload(Item.category), selectinload(Item.images))
+        .join(ItemImage)
+        .filter(
+            Item.user_id == user_id,
+            Item.is_completed == True,
+            Item.finish_time.isnot(None),
+            extract('year', Item.finish_time) == year
+        )
+        .order_by(Item.finish_time.asc())
+        .all()
+    )
     seen_ids = set()
     result = []
     for item in items:

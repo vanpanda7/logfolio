@@ -4,46 +4,29 @@
 
 let todos = [];
 let categories = [];
+let _todoActionLock = false;
 
 /**
  * 初始化待办页面
  */
 async function initTodos() {
-    console.log('待办页面初始化开始...');
-    
-    // 渲染头部导航（待办页面）
     if (typeof window.renderHeader === 'function') {
-        console.log('调用 renderHeader...');
         window.renderHeader('todos');
-        console.log('renderHeader 调用完成');
     } else {
-        console.error('renderHeader 函数未找到！请检查 components.js 是否已正确加载。');
-        // 延迟重试
         setTimeout(() => {
             if (typeof window.renderHeader === 'function') {
                 window.renderHeader('todos');
-            } else {
-                console.error('renderHeader 仍然未找到！');
             }
         }, 100);
     }
     
     try {
-        console.log('开始加载分类...');
         await loadCategories();
-        console.log('分类加载完成');
-        
-        console.log('开始加载待办...');
         await loadTodos();
-        console.log('待办加载完成');
-        
-        console.log('设置表单...');
         setupAddTodoForm();
         setupEditTodoForm();
-        console.log('待办页面初始化完成');
     } catch (error) {
         console.error('待办页面初始化失败:', error);
-        console.error('错误堆栈:', error.stack);
         if (typeof showMessage === 'function') {
             showMessage('页面加载失败: ' + error.message, 'error');
         }
@@ -55,26 +38,15 @@ async function initTodos() {
  */
 async function loadCategories() {
     try {
-        console.log('loadCategories 开始执行...');
-        console.log('CategoriesAPI 是否存在:', typeof CategoriesAPI);
-        console.log('window.CategoriesAPI 是否存在:', typeof window.CategoriesAPI);
-        
-        // 确保使用全局的 CategoriesAPI
         const api = window.CategoriesAPI || CategoriesAPI;
         if (!api) {
-            throw new Error('CategoriesAPI 未找到，请检查 api.js 是否已正确加载');
+            throw new Error('CategoriesAPI 未找到');
         }
         
         categories = await api.getAll();
-        console.log('分类数据获取成功，数量:', categories.length);
         renderCategoryTabs();
-        console.log('分类标签渲染完成');
     } catch (error) {
         console.error('加载分类失败:', error);
-        console.error('错误详情:', {
-            message: error.message,
-            stack: error.stack
-        });
         if (typeof showMessage === 'function') {
             showMessage('加载分类失败: ' + error.message, 'error');
         }
@@ -131,59 +103,43 @@ function renderCategoryTabs() {
 /**
  * 加载待办列表
  */
+let _loadTodosLock = false;
 async function loadTodos() {
-    console.log('loadTodos 开始执行...');
+    if (_loadTodosLock) return;
+    _loadTodosLock = true;
+    
     const loading = document.getElementById('loading');
     const emptyState = document.getElementById('empty-state');
     const todosList = document.getElementById('todos-list');
     
     if (!todosList) {
-        console.error('找不到 todos-list 元素！');
+        _loadTodosLock = false;
         return;
     }
     
-    console.log('显示加载提示...');
     if (loading) loading.style.display = 'block';
     todosList.innerHTML = '';
     
     try {
-        console.log('调用 ItemsAPI.getTodos()...');
-        console.log('ItemsAPI 是否存在:', typeof ItemsAPI);
-        console.log('window.ItemsAPI 是否存在:', typeof window.ItemsAPI);
-        
-        // 确保使用全局的 ItemsAPI
         const api = window.ItemsAPI || ItemsAPI;
-        if (!api) {
-            throw new Error('ItemsAPI 未找到，请检查 api.js 是否已正确加载');
-        }
-        if (!api.getTodos) {
-            throw new Error('ItemsAPI.getTodos 方法未找到');
+        if (!api || !api.getTodos) {
+            throw new Error('ItemsAPI 未找到');
         }
         
-        console.log('调用 api.getTodos()...');
         todos = await api.getTodos();
-        console.log('待办数据获取成功，数量:', todos.length);
-        console.log('待办数据:', todos);
         
         if (loading) loading.style.display = 'none';
         
         if (todos.length === 0) {
-            console.log('没有待办事项，显示空状态');
             if (emptyState) emptyState.style.display = 'block';
+            _loadTodosLock = false;
             return;
         }
         
         if (emptyState) emptyState.style.display = 'none';
-        console.log('开始渲染待办列表...');
         renderTodos(todos);
-        console.log('待办列表渲染完成');
     } catch (error) {
         console.error('加载待办失败:', error);
-        console.error('错误详情:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
-        });
         if (loading) loading.style.display = 'none';
         if (typeof showMessage === 'function') {
             showMessage('加载待办失败: ' + error.message, 'error');
@@ -191,6 +147,7 @@ async function loadTodos() {
             alert('加载待办失败: ' + error.message);
         }
     }
+    _loadTodosLock = false;
 }
 
 /**
@@ -202,7 +159,6 @@ function renderTodos(todosList) {
     
     todosListContainer.innerHTML = '';
     
-    // 按分类分组
     const groupedTodos = {};
     todosList.forEach(todo => {
         const categoryName = todo.category_name || '未分类';
@@ -215,25 +171,21 @@ function renderTodos(todosList) {
     const groupNames = Object.keys(groupedTodos);
     if (groupNames.length === 0) return;
     
-    // 计算最大分组大小，用于计算相对块大小
     const maxCount = groupNames.reduce((max, name) => {
         return Math.max(max, groupedTodos[name].length);
     }, 1);
     
-    // 渲染每个分组
+    const fragment = document.createDocumentFragment();
+    
     groupNames.forEach(categoryName => {
         const count = groupedTodos[categoryName].length;
-        const ratio = count / maxCount; // 0-1
-        const sizeFactor = 0.7 + 0.3 * ratio; // 0.7 - 1.0 之间
+        const ratio = count / maxCount;
+        const sizeFactor = 0.7 + 0.3 * ratio;
         
         const groupContainer = document.createElement('div');
-        groupContainer.className = 'todo-group';
+        groupContainer.className = 'todo-group collapsed';
         groupContainer.style.setProperty('--group-size', sizeFactor.toString());
         
-        // 初始为折叠状态
-        groupContainer.classList.add('collapsed');
-        
-        // 创建分组标题
         const groupHeader = document.createElement('div');
         groupHeader.className = 'todo-group-header';
         
@@ -247,37 +199,30 @@ function renderTodos(todosList) {
         
         groupHeader.appendChild(groupTitle);
         groupHeader.appendChild(groupCount);
-        groupContainer.appendChild(groupHeader);
         
-        // 创建分组内容容器
         const groupContent = document.createElement('div');
         groupContent.className = 'todo-group-content';
         
-        // 创建内容包装器（用于 grid 动画）
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'todo-group-content-wrapper';
         
-        // 渲染该分组下的所有待办
         groupedTodos[categoryName].forEach(todo => {
-            const todoItem = createTodoItem(todo);
-            contentWrapper.appendChild(todoItem);
+            contentWrapper.appendChild(createTodoItem(todo));
         });
         
         groupContent.appendChild(contentWrapper);
+        groupContainer.appendChild(groupHeader);
         groupContainer.appendChild(groupContent);
         
-        // 点击标题展开/收起分组
         groupHeader.addEventListener('click', () => {
-            const isOpen = groupContainer.classList.toggle('open');
-            if (!isOpen) {
-                groupContainer.classList.add('collapsed');
-            } else {
-                groupContainer.classList.remove('collapsed');
-            }
+            groupContainer.classList.toggle('open');
+            groupContainer.classList.toggle('collapsed');
         });
         
-        todosListContainer.appendChild(groupContainer);
+        fragment.appendChild(groupContainer);
     });
+    
+    todosListContainer.appendChild(fragment);
 }
 
 /**
@@ -330,12 +275,13 @@ function createTodoItem(todo) {
  * 完成待办
  */
 async function handleCompleteTodo(itemId, checkbox) {
-    if (!checkbox.checked) {
-        return; // 如果取消勾选，不做任何操作
+    if (_todoActionLock || !checkbox.checked) {
+        if (checkbox.checked && _todoActionLock) checkbox.checked = false;
+        return;
     }
+    _todoActionLock = true;
     
     try {
-        // 触发酷炫纸屑动画
         if (typeof confetti !== 'undefined') {
             confetti({
                 particleCount: 100,
@@ -344,15 +290,12 @@ async function handleCompleteTodo(itemId, checkbox) {
             });
         }
         
-        // 调用完成接口
         await ItemsAPI.completeTodo(itemId);
         
-        // 显示成功消息
         if (typeof showMessage === 'function') {
             showMessage('🎉 恭喜完成一项任务！', 'success');
         }
         
-        // 添加完成动画效果
         const todoItem = checkbox.closest('.todo-item');
         if (todoItem) {
             todoItem.style.transition = 'all 0.5s ease';
@@ -360,25 +303,30 @@ async function handleCompleteTodo(itemId, checkbox) {
             todoItem.style.opacity = '0';
             
             setTimeout(() => {
-                // 重新加载待办列表
                 loadTodos();
+                _todoActionLock = false;
             }, 500);
+            return;
         }
+        loadTodos();
     } catch (error) {
         console.error('完成待办失败:', error);
-        checkbox.checked = false; // 恢复未选中状态
+        checkbox.checked = false;
         if (typeof showMessage === 'function') {
             showMessage('完成待办失败: ' + error.message, 'error');
         }
     }
+    _todoActionLock = false;
 }
 
 /**
  * 删除待办
  */
 async function deleteTodo(itemId) {
+    if (_todoActionLock) return;
     if (typeof showConfirmDialog === 'function') {
         showConfirmDialog('确定要删除这个待办吗？', async () => {
+            _todoActionLock = true;
             try {
                 await ItemsAPI.delete(itemId);
                 if (typeof showMessage === 'function') {
@@ -391,6 +339,7 @@ async function deleteTodo(itemId) {
                     showMessage('删除失败: ' + error.message, 'error');
                 }
             }
+            _todoActionLock = false;
         });
     }
 }
@@ -494,6 +443,7 @@ function setupAddTodoForm() {
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (_todoActionLock) return;
         
         const formData = new FormData(form);
         const categoryId = document.getElementById('todo-category-id').value;
@@ -505,11 +455,10 @@ function setupAddTodoForm() {
             return;
         }
         
-        // 构建 FormData
         const submitData = new FormData();
         submitData.append('title', formData.get('title'));
         submitData.append('category_id', categoryId);
-        submitData.append('is_completed', 'false'); // 标记为待办
+        submitData.append('is_completed', 'false');
         
         const dueTime = formData.get('due_time');
         if (dueTime) {
@@ -521,6 +470,7 @@ function setupAddTodoForm() {
             submitData.append('notes', notes);
         }
         
+        _todoActionLock = true;
         try {
             await ItemsAPI.create(submitData);
             if (typeof showMessage === 'function') {
@@ -534,9 +484,9 @@ function setupAddTodoForm() {
                 showMessage('添加待办失败: ' + error.message, 'error');
             }
         }
+        _todoActionLock = false;
     });
     
-    // 点击模态框背景关闭
     const modal = document.getElementById('add-todo-modal');
     if (modal) {
         modal.addEventListener('click', (e) => {
@@ -556,6 +506,7 @@ function setupEditTodoForm() {
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (_todoActionLock) return;
         
         const formData = new FormData(form);
         const itemId = parseInt(document.getElementById('edit-todo-id').value);
@@ -568,7 +519,6 @@ function setupEditTodoForm() {
             return;
         }
         
-        // 构建 FormData
         const submitData = new FormData();
         submitData.append('title', formData.get('title'));
         submitData.append('category_id', categoryId);
@@ -577,13 +527,13 @@ function setupEditTodoForm() {
         if (dueTime) {
             submitData.append('due_time', dueTime);
         } else {
-            // 后端会把空表单值转为 None，无法区分「未传」和「传空」，所以用 clear_due_time=1 表示清除为无期限
             submitData.append('clear_due_time', '1');
         }
         
         const notes = formData.get('notes');
         submitData.append('notes', notes || '');
         
+        _todoActionLock = true;
         try {
             await ItemsAPI.update(itemId, submitData);
             if (typeof showMessage === 'function') {
@@ -597,9 +547,9 @@ function setupEditTodoForm() {
                 showMessage('更新待办失败: ' + error.message, 'error');
             }
         }
+        _todoActionLock = false;
     });
     
-    // 点击模态框背景关闭
     const modal = document.getElementById('edit-todo-modal');
     if (modal) {
         modal.addEventListener('click', (e) => {

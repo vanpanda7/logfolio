@@ -169,6 +169,8 @@
                     batchAddTotal: 0,
                     chipsTotal: 0,
                     chipsByCategory: {},
+                    _loadingLock: false,
+                    _pendingReload: false,
                 };
             },
             computed: {
@@ -235,6 +237,7 @@
                     }
                 },
                 async loadCategoryCounts() {
+                    if (this._loadingLock) return;
                     try {
                         const year = this.selectedYear ? parseInt(this.selectedYear, 10) : null;
                         const res = await ItemsAPI.getCategoryCounts(year);
@@ -246,6 +249,11 @@
                     }
                 },
                 async loadItems() {
+                    if (this._loadingLock) {
+                        this._pendingReload = true;
+                        return;
+                    }
+                    this._loadingLock = true;
                     this.loading = true;
                     try {
                         const params = { ...this.buildParams(), limit: this.PAGE_SIZE, offset: 0 };
@@ -266,6 +274,11 @@
                         if (typeof showMessage === 'function') showMessage('加载记录失败: ' + (error.message || ''), 'error');
                     } finally {
                         this.loading = false;
+                        this._loadingLock = false;
+                        if (this._pendingReload) {
+                            this._pendingReload = false;
+                            this.loadItems();
+                        }
                     }
                 },
                 async loadMore() {
@@ -313,6 +326,7 @@
                     }
                 },
                 refreshList() {
+                    if (this._loadingLock) return Promise.resolve();
                     this.loadCategoryCounts();
                     return this.loadItems();
                 },
@@ -322,12 +336,20 @@
                         this.selectedCategoryId = String(this.categories[0].id);
                     }
                     this.searchTerm = '';
+                    if (this._loadingLock) {
+                        this._pendingReload = true;
+                        return;
+                    }
                     this.loadCategoryCounts();
                     this.loadItems();
                 },
                 selectCategory(id) {
                     this.selectedCategoryId = id || '';
                     this.searchTerm = '';
+                    if (this._loadingLock) {
+                        this._pendingReload = true;
+                        return;
+                    }
                     this.loadItems();
                 },
                 openQuickAdd() {
@@ -660,18 +682,28 @@
 
         // 兼容：外部或旧逻辑调用时委托给 Vue
         window.filterByCategory = function(categoryId) {
-            if (window.indexApp) {
+            if (!window.indexApp) return;
+            if (window.indexApp._loadingLock) {
+                window.indexApp._pendingReload = true;
                 window.indexApp.selectedCategoryId = categoryId ? String(categoryId) : '';
                 window.indexApp.searchTerm = '';
-                window.indexApp.loadItems();
+                return;
             }
+            window.indexApp.selectedCategoryId = categoryId ? String(categoryId) : '';
+            window.indexApp.searchTerm = '';
+            window.indexApp.loadItems();
         };
         window.filterByYear = function(year) {
-            if (window.indexApp) {
+            if (!window.indexApp) return;
+            if (window.indexApp._loadingLock) {
+                window.indexApp._pendingReload = true;
                 window.indexApp.selectedYear = year ? String(year) : '';
                 window.indexApp.searchTerm = '';
-                window.indexApp.loadItems();
+                return;
             }
+            window.indexApp.selectedYear = year ? String(year) : '';
+            window.indexApp.searchTerm = '';
+            window.indexApp.loadItems();
         };
         
         // 应用筛选：刷新 Vue 列表（详情内添加/删除图片、删除记录等后调用）

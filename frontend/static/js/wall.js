@@ -6,6 +6,7 @@
     let currentCategoryId = null;
     let currentCategoryName = '';
     var wallItems = [];
+    var _wallLoading = false;
 
     var defaultSettings = {
         bg: 'default',
@@ -339,7 +340,7 @@
         var container = document.getElementById('wall-display-columns');
         if (!container) return;
 
-        container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
 
         var columnCount = Math.min(6, Math.max(3, Math.ceil(displayModeItems.length / 10)));
         var columns = [];
@@ -373,8 +374,11 @@
                 column.appendChild(cell);
             });
 
-            container.appendChild(column);
+            fragment.appendChild(column);
         });
+        
+        container.innerHTML = '';
+        container.appendChild(fragment);
     }
 
     function getGridSizeClass(item) {
@@ -405,8 +409,10 @@
             return;
         }
         if (empty) empty.style.display = 'none';
-
+        
         grid.innerHTML = '';
+
+        const fragment = document.createDocumentFragment();
         items.forEach(function (item, index) {
             const cell = document.createElement('div');
             cell.className = 'wall-cell ' + getGridSizeClass(item);
@@ -418,8 +424,9 @@
                 openFullscreen(item);
             });
             cell.style.borderRadius = settings.radius + 'px';
-            grid.appendChild(cell);
+            fragment.appendChild(cell);
         });
+        grid.appendChild(fragment);
     }
 
     function openFullscreen(item) {
@@ -760,6 +767,9 @@
     }
 
     function loadWall() {
+        if (_wallLoading) return;
+        _wallLoading = true;
+        
         const grid = document.getElementById('wall-grid');
         if (grid) grid.innerHTML = '<div class="wall-loading">加载中...</div>';
 
@@ -767,21 +777,23 @@
             .then(function (res) {
                 const items = (res && res.items) ? res.items : [];
                 renderWall(items);
+                _wallLoading = false;
             })
             .catch(function (err) {
                 if (typeof showMessage === 'function') showMessage('加载成就墙失败: ' + (err.message || ''), 'error');
                 renderWall([]);
+                _wallLoading = false;
             });
     }
 
     function renderTabs() {
         var container = document.getElementById('wall-tabs');
         if (!container) return;
-        container.innerHTML = '';
         if (!categories.length) {
             container.innerHTML = '<span class="wall-tabs-empty">暂无分类，请先<a href="/categories">添加分类</a></span>';
             return;
         }
+        const fragment = document.createDocumentFragment();
         categories.forEach(function (cat) {
             var btn = document.createElement('button');
             btn.type = 'button';
@@ -797,8 +809,10 @@
                 this.classList.add('active');
                 loadWall();
             });
-            container.appendChild(btn);
+            fragment.appendChild(btn);
         });
+        container.innerHTML = '';
+        container.appendChild(fragment);
     }
 
     function initWall() {
