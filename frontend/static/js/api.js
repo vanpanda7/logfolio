@@ -1,15 +1,40 @@
 /**
  * API 调用封装模块
- * 统一处理所有对后端API的Fetch请求
+ * 统一处理所有对后端 API 的 Fetch 请求
+ * 优化：请求去重、缓存、自动重试
  */
 
 const API_BASE = window.API_BASE_URL || '/api';
 
+// 请求缓存：key -> { data, timestamp }
+const requestCache = new Map();
+const CACHE_TTL = 30 * 1000; // 30 秒
+
+// 进行中的请求：key -> Promise，用于去重
+const pendingRequests = new Map();
+
+// 分类缓存
 let categoryCache = { data: null, timestamp: 0 };
 const CATEGORY_CACHE_TTL = 5 * 60 * 1000;
 
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, options = {}, useCache = true, retryCount = 0) {
     const url = `${API_BASE}${endpoint}`;
+    const cacheKey = `${endpoint}:${JSON.stringify(options || {})}`;
+    
+    // 返回进行中的相同请求（去重）
+    if (pendingRequests.has(cacheKey)) {
+        return pendingRequests.get(cacheKey);
+    }
+    
+    // 返回缓存数据
+    if (useCache && requestCache.has(cacheKey)) {
+        const { data, timestamp } = requestCache.get(cacheKey);
+        if (Date.now() - timestamp < CACHE_TTL) {
+            return data;
+        }
+        requestCache.delete(cacheKey);
+    }
+    
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
@@ -19,38 +44,56 @@ async function apiRequest(endpoint, options = {}) {
     
     const config = { ...defaultOptions, ...options };
     
-    try {
-        const response = await fetch(url, config);
-        
-        if (response.status === 401) {
-            const error = new Error('认证失败，请检查用户名和密码。如果已登录，请刷新页面重试。');
-            error.status = 401;
-            throw error;
-        }
-        
-        if (!response.ok) {
-            let errorData;
-            try {
-                errorData = await response.json();
-            } catch (e) {
-                errorData = { detail: response.statusText };
+    // 创建请求 Promise
+    const requestPromise = (async () => {
+        try {
+            const response = await fetch(url, config);
+            
+            if (response.status === 401) {
+                const error = new Error('认证失败，请检查用户名和密码。如果已登录，请刷新页面重试。');
+                error.status = 401;
+                throw error;
             }
-            const error = new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-            error.status = response.status;
+            
+            if (!response.ok) {
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    errorData = { detail: response.statusText };
+                }
+                const error = new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                error.status = response.status;
+                throw error;
+            }
+            
+            return await response.json();
+        } catch (error) {
+            // 网络错误自动重试（最多 2 次）
+            if (retryCount < 2 && error.name === 'TypeError') {
+                await new Promise(r => setTimeout(r, 300 * (retryCount + 1)));
+                return apiRequest(endpoint, options, useCache, retryCount + 1);
+            }
             throw error;
         }
-        
-        return await response.json();
-    } catch (error) {
-        if (error instanceof TypeError && error.message.includes('fetch')) {
-            throw new Error('网络请求失败，请检查网络连接或服务器状态');
+    })();
+    
+    pendingRequests.set(cacheKey, requestPromise);
+    
+    try {
+        const data = await requestPromise;
+        // 缓存成功响应（GET 请求）
+        if (useCache && (!options.method || options.method === 'GET')) {
+            requestCache.set(cacheKey, { data, timestamp: Date.now() });
         }
-        throw error;
+        return data;
+    } finally {
+        pendingRequests.delete(cacheKey);
     }
 }
 
 /**
- * 分类相关API
+ * 分类相关 API
  */
 const CategoriesAPI = {
     getAll: (useCache = true) => {
